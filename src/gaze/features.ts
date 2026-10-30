@@ -46,6 +46,8 @@ export interface FrameFeatures {
   blinkL: number;
   blinkR: number;
   nose: P2; // normalised image coords
+  /** Nose tip relative to the eye-corner midpoint, in eye-distance units (head turn/tilt, translation-free). */
+  tilt: P2;
   eyeDistPx: number; // outer-corner distance in video px
 }
 
@@ -148,6 +150,12 @@ export function extractFeatures(
   const oa = lm[EYE_A.left];
   const ob = lm[EYE_B.right];
   const eyeDistPx = Math.hypot((ob.x - oa.x) * videoW, (ob.y - oa.y) * videoH);
+  const midX = ((oa.x + ob.x) / 2) * videoW;
+  const midY = ((oa.y + ob.y) / 2) * videoH;
+  const tilt = {
+    x: (lm[NOSE_TIP].x * videoW - midX) / (eyeDistPx || 1),
+    y: (lm[NOSE_TIP].y * videoH - midY) / (eyeDistPx || 1),
+  };
   return {
     vector,
     eyes: [A, B],
@@ -156,5 +164,6 @@ export function extractFeatures(
     blinkR,
     nose: { x: lm[NOSE_TIP].x, y: lm[NOSE_TIP].y },
     eyeDistPx,
+    tilt,
   };
 }

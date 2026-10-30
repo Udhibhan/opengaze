@@ -84,7 +84,20 @@
           at: Date.now(),
         };
       }
-      Object.assign(store, { enabled: true, dwellMs: 600, calibration: calib() });
+      const mode = new URLSearchParams(location.search).get('mode') || 'head';
+      Object.assign(store, { enabled: true, dwellMs: 600, calibration: calib(), pointer: mode, headRange: 'medium' });
+      // Head mode: start looking at the centre (neutral pose), with a little natural jitter.
+      if (mode === 'head') window.target = [innerWidth / 2, innerHeight / 2];
+      const NEUTRAL = { x: 0, y: 0.6 },
+        RANGE = 0.15;
+      window.jitter = 0.004;
+      function tiltFor([X, Y]) {
+        const j = () => (Math.random() - 0.5) * 2 * window.jitter;
+        return {
+          x: NEUTRAL.x - ((X - innerWidth / 2) / (innerWidth / 2)) * RANGE + j(),
+          y: NEUTRAL.y + ((Y - innerHeight / 2) / (innerHeight / 2)) * RANGE * 0.65 + j(),
+        };
+      }
       window.aim = (x, y) => {
         window.target = [x, y];
         store.calibration = calib();
@@ -108,6 +121,7 @@
           blinkR: 0,
           nose: { x: 0.5, y: 0.5 },
           eyeRatio: 0.15,
+          tilt: tiltFor(window.target),
         };
         listeners.msg.forEach((f) => f(msg));
       }, 33);

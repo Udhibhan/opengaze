@@ -83,6 +83,23 @@
         margin-top: 12px;
         color: #c9d0e0;
       }
+      .seg {
+        display: flex;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .seg button {
+        padding: 9px 6px;
+      }
+      .seg button[aria-pressed='true'] {
+        border-color: #f5b248;
+        background: rgba(245, 178, 72, 0.2);
+      }
+      .label {
+        margin-top: 12px;
+        font-size: 13px;
+        color: #c9d0e0;
+      }
     </style>
   </head>
   <body>
@@ -90,19 +107,34 @@
     <p>Eye control for any website.</p>
     <div class="status" id="status">Loading…</div>
     <div class="row">
-      <button id="toggle" class="primary">Start eye control</button>
+      <button id="toggle" class="primary">Start</button>
+    </div>
+    <div class="label">Point with</div>
+    <div class="seg">
+      <button id="mode-head" aria-pressed="true">Head (steady)</button>
+      <button id="mode-eyes" aria-pressed="false">Eyes</button>
+    </div>
+    <div id="head-opts">
+      <div class="label">Head movement needed</div>
+      <div class="seg">
+        <button data-range="small">Small</button>
+        <button data-range="medium">Medium</button>
+        <button data-range="large">Large</button>
+      </div>
+      <div class="row"><button id="recentre">Re-centre now</button></div>
     </div>
     <div class="row">
-      <button id="calibrate">Set up / calibrate</button>
+      <button id="calibrate">Set up camera / calibrate eyes</button>
     </div>
     <div class="dwell">
       <button id="dwell-dec" aria-label="Shorter dwell">−</button>
-      <b id="dwell">0.9 s dwell</b>
+      <b id="dwell">1.0 s dwell</b>
       <button id="dwell-inc" aria-label="Longer dwell">+</button>
     </div>
     <small
-      >Video is processed on this device and never stored or uploaded. On a page, look at the dock on the right to
-      scroll, go back, type or pause.</small
+      >Head mode: turn or tilt your head gently to move the pointer; hold still on a link to click it. Video is
+      processed on this device and never stored or uploaded. The dock on the right scrolls, goes back, types, re-centres
+      and pauses.</small
     >
     <script type="module" src="./src/popup.ts"></script>
   </body>

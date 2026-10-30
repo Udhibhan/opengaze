@@ -127,9 +127,15 @@ npm run build:extension        # → dist-extension/ (+ opengaze-extension.zip)
 ```
 
 1. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and pick `dist-extension/`.
-2. The OpenGaze app opens in a tab. Allow the camera and calibrate. When validation finishes, eye control turns on for
-   all websites. The toolbar popup has Start/Stop, recalibrate and dwell time.
-3. On any page:
+2. The OpenGaze app opens in a tab. Click **Turn on camera** and allow it (the extension needs this one-time
+   permission). Then click the toolbar icon, choose **Start**.
+3. **Head pointer (default, recommended):** look at the middle of the screen and hold still for a second while it
+   centres. Then turn or tilt your head gently to move the pointer, and hold still on a link to click it. It measures
+   the nose tip relative to the eyes, so leaning or shifting in the chair doesn't move the pointer. No calibration,
+   heavy smoothing plus a soft dead zone, so a still head gives a perfectly still pointer. The popup sets how much
+   head movement is needed (small / medium / large) and re-centres. There is also a Re-centre tile in the dock.
+   **Eyes mode** (popup → Eyes) uses the calibrated eye-gaze model instead. Calibrate in the OpenGaze tab first.
+4. On any page:
    - **Look at a link, button or field** and hold. A ring fills around it, then it's clicked.
    - **Several small links close together?** OpenGaze asks with big numbered buttons instead of guessing (numbered
      badges show which is which).

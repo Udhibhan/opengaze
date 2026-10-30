@@ -1,32 +1,48 @@
-// Toolbar popup: carer-facing start/stop, calibration and dwell time.
+// Toolbar popup: carer-facing start/stop, pointer mode (head / eyes), head range, re-centre, calibration, dwell.
 import type { StoredCalibration } from '../../src/lib/extensionBridge';
 
 const $ = (id: string) => document.getElementById(id)!;
 
 async function render() {
-  const s = (await chrome.storage.local.get(['enabled', 'calibration', 'camera', 'dwellMs'])) as {
+  const s = (await chrome.storage.local.get([
+    'enabled',
+    'calibration',
+    'camera',
+    'dwellMs',
+    'pointer',
+    'headRange',
+  ])) as {
     enabled?: boolean;
     calibration?: StoredCalibration;
     camera?: { ok: boolean; error: string };
     dwellMs?: number;
+    pointer?: 'head' | 'eyes';
+    headRange?: string;
   };
+  const pointer = s.pointer ?? 'head';
+  $('mode-head').setAttribute('aria-pressed', String(pointer === 'head'));
+  $('mode-eyes').setAttribute('aria-pressed', String(pointer === 'eyes'));
+  $('head-opts').style.display = pointer === 'head' ? 'block' : 'none';
+  for (const b of document.querySelectorAll<HTMLButtonElement>('[data-range]'))
+    b.setAttribute('aria-pressed', String(b.dataset.range === (s.headRange ?? 'medium')));
+
   const lines: string[] = [];
-  if (!s.calibration)
-    lines.push('<span class="warn">Not calibrated yet.</span> Open setup to allow the camera and calibrate.');
+  if (pointer === 'head') lines.push('Head pointer: no eye calibration needed.');
+  else if (!s.calibration) lines.push('<span class="warn">Eyes not calibrated yet.</span> Open setup to calibrate.');
   else if (s.calibration.accuracy)
     lines.push(
-      `Calibrated: <b class="ok">${s.calibration.accuracy.grade}</b> (${s.calibration.accuracy.meanDeg.toFixed(1)}°, ±${Math.round(s.calibration.accuracy.p95Px)} px)`,
+      `Eyes calibrated: <b class="ok">${s.calibration.accuracy.grade}</b> (${s.calibration.accuracy.meanDeg.toFixed(1)}°, ±${Math.round(s.calibration.accuracy.p95Px)} px)`,
     );
-  else lines.push('Calibrated (not validated).');
+  else lines.push('Eyes calibrated (not validated).');
   if (s.enabled) {
     if (s.camera && !s.camera.ok)
       lines.push(`<span class="bad">Camera unavailable</span>: ${s.camera.error}. Open setup and allow the camera.`);
-    else lines.push('<span class="ok">● Eye control is on</span>');
-  } else lines.push('Eye control is off.');
+    else lines.push('<span class="ok">● Control is on</span>');
+  } else lines.push('Control is off.');
   $('status').innerHTML = lines.join('<br>');
-  $('toggle').textContent = s.enabled ? 'Stop eye control' : 'Start eye control';
-  ($('toggle') as HTMLButtonElement).disabled = !s.calibration;
-  $('dwell').textContent = `${((s.dwellMs ?? 900) / 1000).toFixed(1)} s dwell`;
+  $('toggle').textContent = s.enabled ? 'Stop' : 'Start';
+  ($('toggle') as HTMLButtonElement).disabled = pointer === 'eyes' && !s.calibration;
+  $('dwell').textContent = `${((s.dwellMs ?? 1000) / 1000).toFixed(1)} s dwell`;
 }
 
 $('toggle').addEventListener('click', async () => {
@@ -34,13 +50,18 @@ $('toggle').addEventListener('click', async () => {
   await chrome.runtime.sendMessage({ type: enabled ? 'og-stop' : 'og-start' });
   await render();
 });
+$('mode-head').addEventListener('click', () => void chrome.storage.local.set({ pointer: 'head' }));
+$('mode-eyes').addEventListener('click', () => void chrome.storage.local.set({ pointer: 'eyes' }));
+$('recentre').addEventListener('click', () => void chrome.storage.local.set({ recentreAt: Date.now() }));
+for (const b of document.querySelectorAll<HTMLButtonElement>('[data-range]'))
+  b.addEventListener('click', () => void chrome.storage.local.set({ headRange: b.dataset.range }));
 $('calibrate').addEventListener('click', () => void chrome.runtime.sendMessage({ type: 'og-open-app' }));
 for (const [id, d] of [
   ['dwell-dec', -100],
   ['dwell-inc', 100],
 ] as const) {
   $(id).addEventListener('click', async () => {
-    const { dwellMs = 900 } = await chrome.storage.local.get('dwellMs');
+    const { dwellMs = 1000 } = await chrome.storage.local.get('dwellMs');
     await chrome.storage.local.set({ dwellMs: Math.min(3000, Math.max(400, (dwellMs as number) + d)) });
   });
 }

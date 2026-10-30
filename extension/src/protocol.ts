@@ -11,6 +11,8 @@ export interface FrameMsg {
   blinkL?: number;
   blinkR?: number;
   nose?: { x: number; y: number };
+  /** Head turn/tilt (nose relative to eyes, eye-distance units) for the head pointer. */
+  tilt?: { x: number; y: number };
   eyeRatio?: number; // outer eye-corner distance / video width
 }
 

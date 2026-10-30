@@ -7,6 +7,7 @@ import { GazeSmoother } from './oneEuro';
 import { Snapper, centre, type Rect } from './snap';
 import { DriftCorrector } from './drift';
 import { LongBlinkDetector } from './blink';
+import { HEAD_RANGES, headToScreen, Steady } from './head';
 import type { AccuracyReport } from './accuracy';
 import { HEAD_LIMITS, type HeadPose } from './features';
 import { createStore } from '../lib/store';
@@ -112,6 +113,7 @@ class GazeEngine {
   private history: { t: number; x: number; y: number }[] = [];
   private mouse: [number, number] | null = null;
   private headNeutral: { x: number; y: number } | null = null;
+  private steady = new Steady(6);
   private lastFrame: TrackerFrame | null = null;
   private smooth: [number, number] | null = null;
   private mouseRaf = 0;
@@ -182,7 +184,9 @@ class GazeEngine {
 
   recentreHead() {
     const f = this.lastFrame?.f;
-    if (f) this.headNeutral = { ...f.nose };
+    if (f) this.headNeutral = { ...f.tilt };
+    this.smoother.reset();
+    this.steady.reset();
   }
 
   /** Called when a carer clicks a target with the mouse/touch. */
@@ -223,14 +227,8 @@ class GazeEngine {
   }
 
   private headPoint(f: NonNullable<TrackerFrame['f']>): [number, number] {
-    if (!this.headNeutral) this.headNeutral = { ...f.nose };
-    const W = window.innerWidth;
-    const H = window.innerHeight;
-    const gain = 6;
-    return [
-      W / 2 - (f.nose.x - this.headNeutral.x) * gain * W,
-      H / 2 + (f.nose.y - this.headNeutral.y) * gain * 1.4 * H,
-    ];
+    if (!this.headNeutral) this.headNeutral = { ...f.tilt };
+    return headToScreen(f.tilt, this.headNeutral, HEAD_RANGES.medium, window.innerWidth, window.innerHeight);
   }
 
   private headOutside(h: HeadPose): string {
@@ -309,7 +307,9 @@ class GazeEngine {
       const W = window.innerWidth;
       const H = window.innerHeight;
       raw = [Math.min(W + 40, Math.max(-40, raw[0])), Math.min(H + 40, Math.max(-40, raw[1]))];
-      this.smooth = this.smoother.update(raw[0], raw[1], dt);
+      const sm = this.smoother.update(raw[0], raw[1], dt);
+      // Head pointer: soft dead zone so a held-still head gives a perfectly still cursor.
+      this.smooth = s.selection === 'head' ? this.steady.update(sm[0], sm[1]) : sm;
     }
 
     const paused = ui.paused;

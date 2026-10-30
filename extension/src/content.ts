@@ -6,6 +6,7 @@ import { GazeSmoother } from '../../src/gaze/oneEuro';
 import { DriftCorrector } from '../../src/gaze/drift';
 import { HEAD_LIMITS, type HeadPose } from '../../src/gaze/features';
 import { screenToClient, viewportFrame } from '../../src/gaze/screen';
+import { HEAD_RANGES, headToScreen, NeutralCapture, Steady, type HeadRange, type Tilt } from '../../src/gaze/head';
 import { predictWords } from '../../src/lib/predict';
 import type { StoredCalibration } from '../../src/lib/extensionBridge';
 import { GAZE_PORT, type FrameMsg } from './protocol';
@@ -21,9 +22,18 @@ type Anchor = { kind: 'tile'; tile: Tile } | { kind: 'point'; x: number; y: numb
 if (window.top === window && !document.querySelector('meta[name="opengaze-app"]')) start();
 
 function start() {
+  // An extension update/reload leaves the previous content script orphaned in open tabs: replace its overlay.
+  document.getElementById('opengaze-overlay')?.remove();
   let calib: StoredCalibration | null = null;
   let enabled = false;
-  let dwellMs = 900;
+  let dwellMs = 1000;
+  /** 'head' = head pointer (default, no calibration needed); 'eyes' = calibrated eye gaze. */
+  let pointer: 'head' | 'eyes' = 'head';
+  let headRange: HeadRange = 'medium';
+  let neutral: Tilt | null = null;
+  let capture: NeutralCapture | null = null;
+  let mountedMode: 'head' | 'eyes' | null = null;
+  const steady = new Steady(6);
   let ui: Ui | null = null;
   let port: chrome.runtime.Port | null = null;
   let retry = 0;
@@ -69,28 +79,37 @@ function start() {
   };
 
   async function load() {
-    const s = (await chrome.storage.local.get(['enabled', 'calibration', 'dwellMs'])) as {
+    const s = (await chrome.storage.local.get(['enabled', 'calibration', 'dwellMs', 'pointer', 'headRange'])) as {
       enabled?: boolean;
       calibration?: StoredCalibration;
       dwellMs?: number;
+      pointer?: 'head' | 'eyes';
+      headRange?: HeadRange;
     };
     enabled = !!s.enabled;
     calib = s.calibration ?? null;
-    dwellMs = s.dwellMs ?? 900;
+    dwellMs = s.dwellMs ?? 1000;
+    pointer = s.pointer ?? 'head';
+    headRange = s.headRange ?? 'medium';
     apply();
   }
 
   function apply() {
-    if (enabled && calib) {
+    if (enabled && (pointer === 'head' || calib)) {
+      if (ui && mountedMode !== pointer) teardown();
       if (!ui) mountUi();
-      const p95 = calib.accuracy?.p95Px ?? 160;
-      smoother.configure({ minCutoff: 0.6, beta: 0.004, saccadePx: Math.max(140, p95) });
+      // Calm filtering: head movement is continuous (no saccades to snap to); eye gaze keeps saccade snapping.
+      if (pointer === 'head') smoother.configure({ minCutoff: 0.35, beta: 0.003, saccadePx: 1e6 });
+      else smoother.configure({ minCutoff: 0.4, beta: 0.003, saccadePx: Math.max(140, calib?.accuracy?.p95Px ?? 160) });
+      steady.px = pointer === 'head' ? 6 : 4;
+      if (pointer === 'head' && !neutral && !capture) startCapture();
       connect();
     } else teardown();
   }
 
   function connect() {
-    if (port || !enabled || !calib || document.visibilityState !== 'visible' || !alive()) return;
+    if (port || !enabled || (pointer === 'eyes' && !calib) || document.visibilityState !== 'visible' || !alive())
+      return;
     try {
       port = chrome.runtime.connect({ name: GAZE_PORT });
     } catch {
@@ -104,8 +123,10 @@ function start() {
     port.onDisconnect.addListener(() => {
       void chrome.runtime.lastError;
       port = null;
+      // Extension was reloaded or removed: this script is orphaned, so take its UI down.
+      if (!alive()) return teardown();
       // The sensor page may still be starting: retry with backoff.
-      if (enabled && alive()) setTimeout(connect, Math.min(5000, 800 * ++retry));
+      if (enabled) setTimeout(connect, Math.min(5000, 800 * ++retry));
     });
   }
 
@@ -114,6 +135,7 @@ function start() {
     port = null;
     ui?.host.remove();
     ui = null;
+    mountedMode = null;
     dockTiles = [];
     kbTiles = [];
     modalTiles = null;
@@ -134,7 +156,10 @@ function start() {
       drift.reset();
       smoother.reset();
     }
-    if (ch.dwellMs) dwellMs = (ch.dwellMs.newValue as number) ?? 900;
+    if (ch.dwellMs) dwellMs = (ch.dwellMs.newValue as number) ?? 1000;
+    if (ch.pointer) pointer = (ch.pointer.newValue as 'head' | 'eyes') ?? 'head';
+    if (ch.headRange) headRange = (ch.headRange.newValue as HeadRange) ?? 'medium';
+    if (ch.recentreAt) startCapture();
     apply();
   });
   window.addEventListener('keydown', (e) => {
@@ -158,7 +183,8 @@ function start() {
 
   function mountUi() {
     ui = buildUi();
-    const dockH = clamp((innerHeight - 140) / 5.4, 70, 96);
+    mountedMode = pointer;
+    const dockH = clamp((innerHeight - 140) / (pointer === 'head' ? 6.4 : 5.4), 64, 96);
     const mk = (label: string, sub: string, t: Omit<Tile, 'el'>, cls = '') => {
       const el = tileEl(label, sub, cls);
       el.style.height = `${dockH}px`;
@@ -188,6 +214,7 @@ function start() {
         else toast('Look at a text box first, then choose Keyboard');
       },
     });
+    if (pointer === 'head') mk('Re-centre', 'look at middle', { action: startCapture });
     pauseTile = mk('Pause', 'look 2 s', {
       action: () => {
         paused = !paused;
@@ -505,6 +532,14 @@ function start() {
     );
   }
 
+  /** Head pointer: capture a new centre pose while the user looks at the middle of the screen. */
+  function startCapture() {
+    if (pointer !== 'head') return;
+    capture = new NeutralCapture(20);
+    resetDwell();
+    toast('Look at the middle of the screen and hold still…', 1500);
+  }
+
   function holdGaze() {
     holdUntilMoved = smooth ? [smooth[0], smooth[1]] : null;
     progressMs = 0;
@@ -524,7 +559,7 @@ function start() {
   }
 
   function onFrame(m: FrameMsg) {
-    if (!ui || !calib) return;
+    if (!ui || (pointer === 'eyes' && !calib)) return;
     const t = performance.now();
     const dt = lastT ? clamp((t - lastT) / 1000, 0.001, 0.2) : 1 / 30;
     lastT = t;
@@ -536,7 +571,7 @@ function start() {
     drift.decay(dt);
 
     // Face / head checks.
-    const home = calib.headRef.nose ?? { x: 0.5, y: 0.5 };
+    const home = (pointer === 'eyes' && calib?.headRef.nose) || { x: 0.5, y: 0.5 };
     if (!m.face || !m.v) {
       faceLostSince ??= t;
       drawFace(ui.face, null, home, false);
@@ -550,7 +585,7 @@ function start() {
     }
     faceLostSince = null;
     let headOut = false;
-    if (m.head && headOutside(m.head)) {
+    if (pointer === 'eyes' && m.head && headOutside(m.head)) {
       headOutSince ??= t;
       headOut = t - headOutSince > 400;
     } else headOutSince = null;
@@ -562,28 +597,48 @@ function start() {
       resetDwell();
     }
 
-    // Gaze point: model (calibration-page CSS px) -> screen -> this page's CSS px, plus drift correction.
-    const closed = Math.min(m.blinkL ?? 0, m.blinkR ?? 0) > 0.55;
-    if (!closed) {
+    const closed = pointer === 'eyes' && Math.min(m.blinkL ?? 0, m.blinkR ?? 0) > 0.55;
+    let raw: [number, number] | null = null;
+    if (pointer === 'head') {
+      if (!m.tilt) return;
+      if (capture) {
+        const n = capture.add(m.tilt);
+        ui.cursor.style.opacity = '0';
+        if (!n) return;
+        neutral = n;
+        capture = null;
+        smoother.reset();
+        steady.reset();
+        drift.reset();
+        toast('Centred. Turn or tilt your head gently to move the pointer.', 2200);
+      }
+      if (!neutral) return;
+      raw = headToScreen(m.tilt, neutral, HEAD_RANGES[headRange], innerWidth, innerHeight);
+    } else if (!closed && calib) {
+      // Eye gaze: model (calibration-page CSS px) -> screen -> this page's CSS px.
       const [px, py] = predict(calib.model, m.v);
-      const [cx, cy] = screenToClient(
+      raw = screenToClient(
         calib.frame.left + px * calib.frame.scale,
         calib.frame.top + py * calib.frame.scale,
         viewportFrame(calib.dpr),
       );
-      trail.push({ t, x: cx, y: cy });
+    }
+    if (raw) {
+      trail.push({ t, x: raw[0], y: raw[1] });
       trail = trail.filter((p) => t - p.t < 400);
-      const [rx, ry] = drift.apply(cx, cy);
-      smooth = smoother.update(clamp(rx, -40, innerWidth + 40), clamp(ry, -40, innerHeight + 40), dt);
+      const [rx, ry] = drift.apply(raw[0], raw[1]);
+      const [sx, sy] = smoother.update(clamp(rx, -40, innerWidth + 40), clamp(ry, -40, innerHeight + 40), dt);
+      smooth = steady.update(sx, sy);
     }
     if (!smooth) return;
     step(t, dt, headOut, closed);
   }
 
   function step(t: number, dt: number, blocked: boolean, closed: boolean) {
-    if (!ui || !calib || !smooth) return;
+    if (!ui || !smooth) return;
     const [x, y] = smooth;
-    const p95 = calib.accuracy?.p95Px ?? 160;
+    // Pointer precision: a head pointer is steady and precise; eye gaze uses its measured error.
+    const p95 = pointer === 'head' ? 60 : (calib?.accuracy?.p95Px ?? 160);
     const R = clamp(0.45 * p95, 35, 90); // fixation radius
     const R2 = clamp(0.9 * p95, 40, 160); // candidate search radius
     const pad = clamp(0.5 * p95, 16, 70); // tile padding

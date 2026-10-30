@@ -34,6 +34,7 @@ tracker.on((fr) => {
         blinkL: f.blinkL,
         blinkR: f.blinkR,
         nose: f.nose,
+        tilt: f.tilt,
         eyeRatio: f.eyeDistPx / fr.videoW,
       }
     : { type: 'frame', t: fr.t, face: false };

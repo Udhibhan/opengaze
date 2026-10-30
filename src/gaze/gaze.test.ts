@@ -223,3 +223,31 @@ describe('features', () => {
     expect(p.tz).toBe(-50);
   });
 });
+
+describe('head pointer', () => {
+  it('maps neutral to the centre and turns to the correct side', async () => {
+    const { headToScreen } = await import('./head');
+    expect(headToScreen({ x: 0, y: 0.5 }, { x: 0, y: 0.5 }, 0.15, 1000, 800)).toEqual([500, 400]);
+    // Nose moves toward image-right (user's left) -> cursor moves left.
+    const [x] = headToScreen({ x: 0.15, y: 0.5 }, { x: 0, y: 0.5 }, 0.15, 1000, 800);
+    expect(x).toBeCloseTo(0);
+    // Nose lower relative to the eyes (head tilted down) -> cursor moves down.
+    const [, y] = headToScreen({ x: 0, y: 0.6 }, { x: 0, y: 0.5 }, 0.15, 1000, 800);
+    expect(y).toBeGreaterThan(400);
+  });
+  it('Steady holds still inside the dead zone and follows real movement', async () => {
+    const { Steady } = await import('./head');
+    const s = new Steady(6);
+    s.update(100, 100);
+    expect(s.update(104, 102)).toEqual([100, 100]);
+    const [x] = s.update(150, 100);
+    expect(x).toBeCloseTo(144);
+  });
+  it('NeutralCapture returns the median after enough frames', async () => {
+    const { NeutralCapture } = await import('./head');
+    const c = new NeutralCapture(5);
+    let r = null;
+    for (const v of [0.1, 0.12, 0.5, 0.11, 0.13]) r = c.add({ x: v, y: 0.5 });
+    expect(r).toEqual({ x: 0.12, y: 0.5 });
+  });
+});
