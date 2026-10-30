@@ -16,5 +16,5 @@
     "noEmit": true,
     "types": ["vite/client", "node", "vitest/importMeta"]
   },
-  "include": ["src", "server", "config", "vite.config.ts"]
+  "include": ["src", "server", "api", "config", "vite.config.ts"]
 }

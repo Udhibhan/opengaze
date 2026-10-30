@@ -115,7 +115,14 @@ cp .env.example .env        # optional: add ANTHROPIC_API_KEY for Claude replies
 npm run dev                 # Vite on http://localhost:5173 + reply proxy on :8787
 ```
 
-Open http://localhost:5173, turn on the camera, choose a selection method, calibrate, and talk.
+### Deploy to Vercel
+
+The repo is Vercel-ready: the Vite app is served statically, and `api/suggest`, `api/complete` and `api/health` run as
+serverless functions that reuse `server/suggest.ts`. Import the GitHub repo in Vercel, add `ANTHROPIC_API_KEY` as an
+environment variable (optional, since without it the offline phrase bank is used), and deploy. HTTPS, which the camera
+requires, is automatic. The Hobby plan is free for non-commercial use, so hosting stays $0.
+
+Open http://localhost:5173 (or your Vercel URL), turn on the camera, choose a selection method, calibrate, and talk.
 Keys: **D** toggles the debug overlay (face mesh, iris points, raw vs smoothed gaze, FPS, error). **Esc** returns to
 setup.
 
