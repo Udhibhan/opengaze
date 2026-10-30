@@ -1,0 +1,146 @@
+@import '@fontsource/atkinson-hyperlegible/400.css';
+@import '@fontsource/atkinson-hyperlegible/700.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Colour tokens. Text pairs meet WCAG AAA (>= 7:1) on their backgrounds. */
+:root,
+[data-theme='dark'] {
+  --bg: 11 21 48; /* deep navy */
+  --panel: 20 34 70;
+  --panel2: 29 47 92;
+  --line: 58 78 124;
+  --ink: 246 242 233; /* soft off-white, ~15:1 on bg */
+  --muted: 201 208 224; /* ~11:1 on bg */
+  --amber: 245 178 72; /* gaze focus accent */
+  --danger: 248 128 120;
+  --ok: 120 222 168;
+  color-scheme: dark;
+}
+[data-theme='light'] {
+  --bg: 246 243 236;
+  --panel: 255 255 255;
+  --panel2: 236 231 220;
+  --line: 196 189 176;
+  --ink: 15 22 38;
+  --muted: 52 61 79;
+  --amber: 156 84 0;
+  --danger: 176 30 30;
+  --ok: 18 110 56;
+  color-scheme: light;
+}
+[data-contrast='high'] {
+  --bg: 0 0 0;
+  --panel: 0 0 0;
+  --panel2: 20 20 20;
+  --line: 255 255 255;
+  --ink: 255 255 255;
+  --muted: 255 255 255;
+  --amber: 255 221 0;
+  --danger: 255 110 110;
+  --ok: 90 255 160;
+}
+[data-theme='light'][data-contrast='high'] {
+  --bg: 255 255 255;
+  --panel: 255 255 255;
+  --panel2: 240 240 240;
+  --line: 0 0 0;
+  --ink: 0 0 0;
+  --muted: 0 0 0;
+  --amber: 120 50 0;
+  --danger: 160 0 0;
+  --ok: 0 90 30;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  @apply bg-bg text-ink font-sans antialiased;
+  font-size: 20px;
+  line-height: 1.4;
+  overflow: hidden;
+}
+
+[data-motion='reduced'] *,
+[data-motion='reduced'] *::before,
+[data-motion='reduced'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+:focus-visible {
+  outline: 3px solid rgb(var(--amber));
+  outline-offset: 3px;
+}
+
+.gaze-tile {
+  @apply relative flex select-none items-center justify-center rounded-3xl border-2 border-line bg-panel text-ink;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+.gaze-tile[data-hover='true'] {
+  border-color: rgb(var(--amber));
+  background-color: rgb(var(--panel2));
+  box-shadow:
+    0 0 0 2px rgb(var(--amber) / 0.35),
+    0 10px 40px -8px rgb(var(--amber) / 0.45);
+  transform: translateY(-2px) scale(1.015);
+}
+[data-motion='reduced'] .gaze-tile[data-hover='true'] {
+  transform: none;
+}
+.gaze-tile[data-variant='primary'] {
+  background-color: rgb(var(--amber) / 0.16);
+}
+.gaze-tile[data-variant='danger'] {
+  border-color: rgb(var(--danger));
+  background-color: rgb(var(--danger) / 0.14);
+}
+.gaze-tile[data-variant='quiet'] {
+  background-color: transparent;
+}
+.gaze-tile[aria-disabled='true'] {
+  opacity: 0.45;
+}
+
+@keyframes og-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(var(--amber) / 0.7);
+  }
+  100% {
+    box-shadow: 0 0 0 26px rgb(var(--amber) / 0);
+  }
+}
+.og-pulse {
+  animation: og-pulse 520ms ease-out;
+}
+
+.gaze-cursor {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  border-radius: 9999px;
+  pointer-events: none;
+  z-index: 60;
+  background: radial-gradient(
+    circle,
+    rgb(var(--amber) / 0.95) 0 28%,
+    rgb(var(--amber) / 0.35) 45%,
+    rgb(var(--amber) / 0) 70%
+  );
+  box-shadow: 0 0 24px 6px rgb(var(--amber) / 0.35);
+  transition: opacity 200ms ease;
+  will-change: transform;
+}
