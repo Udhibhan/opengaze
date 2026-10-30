@@ -54,6 +54,8 @@ export interface SelectEvent {
 
 export interface HeadRef {
   mean: HeadPose;
+  /** Mean nose-tip position (normalised camera coords) during calibration: the "home" position. */
+  nose?: { x: number; y: number };
 }
 
 interface TargetReg {

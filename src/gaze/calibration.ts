@@ -8,6 +8,7 @@ import type { HeadRef } from './engine';
 export interface Sample {
   vector: number[];
   head: HeadPose;
+  nose: { x: number; y: number };
 }
 
 export const SETTLE_MS = 600;
@@ -61,7 +62,7 @@ export function collect(
       const faceOk = fr.t - lastFace < 400;
       const elapsed = fr.t - shownAt;
       if (elapsed >= SETTLE_MS && usable(fr)) {
-        out.push({ vector: fr.f!.vector.slice(), head: { ...fr.f!.head } });
+        out.push({ vector: fr.f!.vector.slice(), head: { ...fr.f!.head }, nose: { ...fr.f!.nose } });
         onProgress?.(out.length, faceOk);
       } else onProgress?.(out.length, faceOk);
       // Wait longer if the face is missing; never hang forever.
@@ -89,6 +90,7 @@ export function fitCalibration(perPoint: { x: number; y: number; samples: Sample
   const Y: number[][] = [];
   const G: number[] = [];
   const heads: HeadPose[] = [];
+  const noses: { x: number; y: number }[] = [];
   let total = 0;
   perPoint.forEach((p, gi) => {
     total += p.samples.length;
@@ -103,6 +105,7 @@ export function fitCalibration(perPoint: { x: number; y: number; samples: Sample
       Y.push([p.x, p.y]);
       G.push(gi);
       heads.push(p.samples[i].head);
+      noses.push(p.samples[i].nose);
     }
   });
   if (new Set(G).size < 5) return null;
@@ -111,7 +114,10 @@ export function fitCalibration(perPoint: { x: number; y: number; samples: Sample
   return {
     fit,
     model: fit.model,
-    headRef: { mean: { yaw: m('yaw'), pitch: m('pitch'), roll: m('roll'), tx: m('tx'), ty: m('ty'), tz: m('tz') } },
+    headRef: {
+      mean: { yaw: m('yaw'), pitch: m('pitch'), roll: m('roll'), tx: m('tx'), ty: m('ty'), tz: m('tz') },
+      nose: { x: mean(noses.map((n) => n.x)), y: mean(noses.map((n) => n.y)) },
+    },
     kept: X.length,
     total,
   };

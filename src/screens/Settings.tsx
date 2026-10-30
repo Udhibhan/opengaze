@@ -156,6 +156,16 @@ export function SettingsScreen() {
               <Crosshair size={30} aria-hidden /> Re-centre head pointer
             </span>
           </GazeTarget>
+          <Stepper
+            id="set-dist"
+            label="Viewing distance"
+            value={s.viewingDistanceCm}
+            unit="cm"
+            step={5}
+            min={30}
+            max={120}
+            onChange={(v) => set({ viewingDistanceCm: v })}
+          />
         </div>
       ) : (
         <div className="grid min-h-0 flex-1 auto-rows-min gap-4 overflow-y-auto lg:grid-cols-3">
@@ -199,18 +209,9 @@ export function SettingsScreen() {
             on={s.reducedMotion}
             onChange={(v) => set({ reducedMotion: v })}
           />
+          <Toggle id="set-camera" label="Camera view" on={s.showCamera} onChange={(v) => set({ showCamera: v })} />
           <Toggle id="set-sound" label="Selection sound" on={s.sound} onChange={(v) => set({ sound: v })} />
           <Toggle id="set-ai" label="Claude suggestions" on={s.useAI} onChange={(v) => set({ useAI: v })} />
-          <Stepper
-            id="set-dist"
-            label="Viewing distance"
-            value={s.viewingDistanceCm}
-            unit="cm"
-            step={5}
-            min={30}
-            max={120}
-            onChange={(v) => set({ viewingDistanceCm: v })}
-          />
         </div>
       )}
     </div>

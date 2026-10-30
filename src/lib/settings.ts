@@ -21,6 +21,8 @@ export interface Settings {
   name: string;
   aboutMe: string;
   useAI: boolean;
+  /** Small live camera view with a centring guide on every screen. */
+  showCamera: boolean;
 }
 
 const prefersReduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -41,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   name: '',
   aboutMe: '',
   useAI: true,
+  showCamera: true,
 };
 
 // Settings (including the optional name / "about me") stay on this device in localStorage.

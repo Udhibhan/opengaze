@@ -17,6 +17,7 @@ import { useStore } from '../lib/store';
 import { GazeTarget } from '../components/GazeTarget';
 import { Stepper } from '../components/Stepper';
 import { selectTick } from '../lib/sound';
+import { CameraPreview } from '../components/CameraPreview';
 
 type Phase = 'countdown' | 'calibrate' | 'fitting' | 'validate' | 'result' | 'failed';
 
@@ -48,7 +49,7 @@ export function Calibrate() {
 
     async function run() {
       setPhase('countdown');
-      for (let c = 3; c > 0; c--) {
+      for (let c = 5; c > 0; c--) {
         setCount(c);
         await new Promise((r) => setTimeout(r, 800));
         if (signal.cancelled) return;
@@ -154,7 +155,7 @@ export function Calibrate() {
     <div className="relative h-full cursor-none bg-bg">
       <div className="pointer-events-none absolute inset-x-0 top-6 text-center">
         <div className="text-2xl font-bold">
-          {phase === 'countdown' && 'Calibration: follow the dot with your eyes'}
+          {phase === 'countdown' && 'Get comfortable, then follow the dot with your eyes'}
           {phase === 'calibrate' && `Look at the centre of the dot · ${idx + 1} of ${total}`}
           {phase === 'fitting' && 'Fitting your personal gaze model…'}
           {phase === 'validate' && `Checking accuracy · ${idx + 1} of ${total}`}
@@ -176,6 +177,9 @@ export function Calibrate() {
           >
             {count}
           </motion.div>
+          <div className="absolute bottom-10">
+            <CameraPreview width={360} showHint centre />
+          </div>
         </div>
       )}
 

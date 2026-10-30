@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Delete, Eraser, MessageSquare, Sparkles, Volume2, X } from 'lucide-react';
 import { GazeTarget } from '../components/GazeTarget';
 import { PauseTile } from '../components/TopBar';
+import { CameraPreview } from '../components/CameraPreview';
+import { settings } from '../lib/settings';
 import { StatusPill } from '../components/StatusPill';
 import { gazeUi } from '../gaze/engine';
 import { applyWord, predictWords } from '../lib/predict';
@@ -26,6 +28,7 @@ function deleteWord(t: string): string {
 export function Keyboard() {
   const layout = useLayout();
   const paused = useStore(gazeUi, (s) => s.paused);
+  const showCamera = useStore(settings, (s) => s.showCamera);
   const b = useStore(bench, (s) => s);
   const [text, setText] = useState('');
   const [completions, setCompletions] = useState<string[] | null>(null);
@@ -100,6 +103,7 @@ export function Keyboard() {
             />
           </div>
         </div>
+        {showCamera && <CameraPreview width={190} />}
         <PauseTile paused={paused} />
       </div>
 

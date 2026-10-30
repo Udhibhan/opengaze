@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { gazeUi } from '../gaze/engine';
 import { useStore } from '../lib/store';
 import { settings } from '../lib/settings';
+import { CameraPreview } from './CameraPreview';
 
 /** Calm, non-alarming notices: face lost, head out of range, low light, distance. */
 export function Banners() {
@@ -12,6 +13,8 @@ export function Banners() {
   const mode = useStore(settings, (s) => s.selection);
   if (mode === 'mouse') return null;
 
+  // While selections are paused for position, show a big camera view so the user can see how to re-centre.
+  const needsCamera = status === 'face-lost' || status === 'head-out';
   let msg = '';
   let sub = '';
   if (status === 'face-lost') {
@@ -44,6 +47,11 @@ export function Banners() {
           >
             <div className="text-2xl font-bold">{msg}</div>
             {sub && <div className="mt-1 text-lg text-muted">{sub}</div>}
+            {needsCamera && (
+              <div className="mt-3 flex justify-center">
+                <CameraPreview width={320} showHint />
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
