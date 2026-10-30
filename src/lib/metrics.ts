@@ -45,15 +45,23 @@ export function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
-export function recordUsage(model: string, u: { input_tokens: number; output_tokens: number }, kind: string) {
+/**
+ * @param kind 'paid' = fresh Claude call, 'cached' = served from the proxy cache (no new cost),
+ *             'offline' = local fallback (may still carry usage from an earlier call that finished late)
+ */
+export function recordUsage(
+  model: string,
+  u: { input_tokens: number; output_tokens: number },
+  kind: 'paid' | 'cached' | 'offline',
+) {
   const m = metrics.get();
-  const cached = kind.endsWith('cached');
+  const billable = kind !== 'cached';
   metrics.set({
-    inputTokens: m.inputTokens + (cached ? 0 : u.input_tokens),
-    outputTokens: m.outputTokens + (cached ? 0 : u.output_tokens),
-    costUsd: m.costUsd + (cached ? 0 : costUsd(model || MODEL_ID, u.input_tokens, u.output_tokens)),
-    requests: m.requests + 1,
-    cachedRequests: m.cachedRequests + (cached ? 1 : 0),
+    inputTokens: m.inputTokens + (billable ? u.input_tokens : 0),
+    outputTokens: m.outputTokens + (billable ? u.output_tokens : 0),
+    costUsd: m.costUsd + (billable ? costUsd(model || MODEL_ID, u.input_tokens, u.output_tokens) : 0),
+    requests: m.requests + (kind === 'offline' ? 0 : 1),
+    cachedRequests: m.cachedRequests + (kind === 'cached' ? 1 : 0),
   });
 }
 

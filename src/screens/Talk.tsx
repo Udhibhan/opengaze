@@ -170,7 +170,7 @@ export function Talk() {
       </section>
       {mic.error && <div className="text-lg text-danger">{mic.error}</div>}
 
-      {/* Replies + side column */}
+      {/* Replies + quick phrases, with the main navigation column beside them */}
       <section className="flex min-h-0 flex-1 gap-4">
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="mb-2 flex items-center gap-2 text-base text-muted">
@@ -207,6 +207,25 @@ export function Talk() {
               </span>
             </GazeTarget>
           </div>
+          {/* Quick phrases */}
+          <section
+            className="mt-4 grid gap-4"
+            style={{ gridTemplateColumns: `repeat(${QUICK_PHRASES.length}, minmax(0, 1fr))` }}
+            aria-label="Quick phrases"
+          >
+            {QUICK_PHRASES.map((p) => (
+              <GazeTarget
+                key={p}
+                id={`quick-${p}`}
+                label={p}
+                onSelect={() => say(p)}
+                variant={p.startsWith("I'm in pain") || p.startsWith('Please call') ? 'danger' : 'default'}
+                style={{ height: Math.max(120, Math.min(layout.minTile, 150)) }}
+              >
+                <span className="px-2 text-center text-2xl font-bold leading-tight">{p}</span>
+              </GazeTarget>
+            ))}
+          </section>
         </div>
 
         <nav className="flex w-[210px] shrink-0 flex-col gap-4" aria-label="Main">
@@ -259,26 +278,6 @@ export function Talk() {
             </span>
           </GazeTarget>
         </nav>
-      </section>
-
-      {/* Quick phrases */}
-      <section
-        className="grid gap-4"
-        style={{ gridTemplateColumns: `repeat(${QUICK_PHRASES.length}, minmax(0, 1fr))` }}
-        aria-label="Quick phrases"
-      >
-        {QUICK_PHRASES.map((p) => (
-          <GazeTarget
-            key={p}
-            id={`quick-${p}`}
-            label={p}
-            onSelect={() => say(p)}
-            variant={p.startsWith("I'm in pain") || p.startsWith('Please call') ? 'danger' : 'default'}
-            style={{ height: Math.max(120, Math.min(layout.minTile, 150)) }}
-          >
-            <span className="px-2 text-center text-2xl font-bold leading-tight">{p}</span>
-          </GazeTarget>
-        ))}
       </section>
     </div>
   );

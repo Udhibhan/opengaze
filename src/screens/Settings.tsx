@@ -93,22 +93,22 @@ export function SettingsScreen() {
 
       {page === 0 ? (
         <div className="grid min-h-0 flex-1 auto-rows-min gap-4 overflow-y-auto lg:grid-cols-3">
-          <div className="rounded-3xl border-2 border-line bg-panel p-3 lg:col-span-3">
-            <div className="mb-2 px-1 text-lg text-muted">Selection method</div>
-            <div className="grid grid-cols-4 gap-3">
-              {METHODS.map((m) => (
-                <GazeTarget
-                  key={m.id}
-                  id={`set-method-${m.id}`}
-                  label={m.label}
-                  onSelect={() => set({ selection: m.id })}
-                  variant={s.selection === m.id ? 'primary' : 'default'}
-                  style={{ height: 120 }}
-                >
-                  <span className="text-xl font-bold">{m.label}</span>
-                </GazeTarget>
-              ))}
-            </div>
+          <div className="grid grid-cols-4 gap-3 lg:col-span-3">
+            {METHODS.map((m) => (
+              <GazeTarget
+                key={m.id}
+                id={`set-method-${m.id}`}
+                label={`Select by ${m.label}`}
+                onSelect={() => set({ selection: m.id })}
+                variant={s.selection === m.id ? 'primary' : 'default'}
+                style={{ height: 120 }}
+              >
+                <span className="flex flex-col items-center text-xl font-bold">
+                  <span className="text-base font-normal text-muted">Select by</span>
+                  {m.label}
+                </span>
+              </GazeTarget>
+            ))}
           </div>
           <Stepper
             id="set-dwell"
@@ -156,16 +156,6 @@ export function SettingsScreen() {
               <Crosshair size={30} aria-hidden /> Re-centre head pointer
             </span>
           </GazeTarget>
-          <Stepper
-            id="set-dist"
-            label="Viewing distance"
-            value={s.viewingDistanceCm}
-            unit="cm"
-            step={5}
-            min={30}
-            max={120}
-            onChange={(v) => set({ viewingDistanceCm: v })}
-          />
         </div>
       ) : (
         <div className="grid min-h-0 flex-1 auto-rows-min gap-4 overflow-y-auto lg:grid-cols-3">
@@ -211,6 +201,16 @@ export function SettingsScreen() {
           />
           <Toggle id="set-sound" label="Selection sound" on={s.sound} onChange={(v) => set({ sound: v })} />
           <Toggle id="set-ai" label="Claude suggestions" on={s.useAI} onChange={(v) => set({ useAI: v })} />
+          <Stepper
+            id="set-dist"
+            label="Viewing distance"
+            value={s.viewingDistanceCm}
+            unit="cm"
+            step={5}
+            min={30}
+            max={120}
+            onChange={(v) => set({ viewingDistanceCm: v })}
+          />
         </div>
       )}
     </div>

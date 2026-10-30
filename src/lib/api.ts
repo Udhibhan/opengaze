@@ -21,6 +21,9 @@ export interface Turn {
   text: string;
 }
 
+const kindOf = (source: string): 'paid' | 'cached' | 'offline' =>
+  source === 'claude' ? 'paid' : source === 'cache' ? 'cached' : 'offline';
+
 async function post<T>(path: string, body: unknown, timeoutMs: number): Promise<T> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
@@ -48,7 +51,7 @@ export async function suggestReplies(partner: string, history: Turn[]): Promise<
       { partner, history: history.slice(-8), name: s.name, aboutMe: s.aboutMe },
       4000,
     );
-    if (res.usage) recordUsage(res.model ?? '', res.usage, res.source === 'claude' ? 'suggest' : 'suggest-cached');
+    if (res.usage) recordUsage(res.model ?? '', res.usage, kindOf(res.source));
     const replies =
       Array.isArray(res.replies) && res.replies.length ? res.replies.slice(0, 6) : fallbackReplies(partner);
     return { replies, source: res.source, latencyMs: performance.now() - t0 };
@@ -74,7 +77,7 @@ export async function completeSentence(
       { text, partner, history: history.slice(-6), name: s.name, aboutMe: s.aboutMe },
       4000,
     );
-    if (res.usage) recordUsage(res.model ?? '', res.usage, 'complete');
+    if (res.usage) recordUsage(res.model ?? '', res.usage, kindOf(res.source));
     return { completions: res.completions?.length ? res.completions.slice(0, 3) : local(), source: res.source };
   } catch {
     return { completions: local(), source: 'offline' };

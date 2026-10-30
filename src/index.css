@@ -99,6 +99,7 @@ body {
   transform: none;
 }
 .gaze-tile[data-variant='primary'] {
+  border-color: rgb(var(--amber) / 0.75);
   background-color: rgb(var(--amber) / 0.16);
 }
 .gaze-tile[data-variant='danger'] {

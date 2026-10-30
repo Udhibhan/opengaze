@@ -196,6 +196,7 @@ export function Keyboard() {
             <GazeTarget
               key={k}
               id={`key-${k}`}
+              repeatable
               label={k === "'" ? 'apostrophe' : k}
               onSelect={() => edit((t) => t + k)}
             >
@@ -215,12 +216,18 @@ export function Keyboard() {
           <GazeTarget id="kb-space" label="Space" onSelect={() => edit((t) => (t && !t.endsWith(' ') ? `${t} ` : t))}>
             <span className="text-xl font-bold">Space</span>
           </GazeTarget>
-          <GazeTarget id="kb-del" label="Delete letter" onSelect={() => edit((t) => t.slice(0, -1))} disabled={!text}>
+          <GazeTarget
+            id="kb-del"
+            repeatable
+            label="Delete letter"
+            onSelect={() => edit((t) => t.slice(0, -1))}
+            disabled={!text}
+          >
             <span className="flex flex-col items-center gap-1 text-lg font-bold">
               <Delete size={28} aria-hidden /> Letter
             </span>
           </GazeTarget>
-          <GazeTarget id="kb-delword" label="Delete word" onSelect={() => edit(deleteWord)} disabled={!text}>
+          <GazeTarget id="kb-delword" repeatable label="Delete word" onSelect={() => edit(deleteWord)} disabled={!text}>
             <span className="flex flex-col items-center gap-1 text-lg font-bold">
               <Delete size={28} aria-hidden /> Word
             </span>

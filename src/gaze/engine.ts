@@ -63,6 +63,8 @@ interface TargetReg {
   onSelect: () => void;
   dwellMs?: number;
   pauseSafe?: boolean;
+  /** Can be selected again without looking away first (keyboard keys, steppers). */
+  repeatable?: boolean;
 }
 
 const HEAD_LIMITS = { yaw: 0.24, pitch: 0.2, tx: 6, ty: 5, tz: 14 };
@@ -103,6 +105,9 @@ class GazeEngine {
   private progressMs = 0;
   private graceSince: number | null = null;
   private cooldownUntil = 0;
+  /** Last selected non-repeatable target: it can't fire again until the gaze leaves it. */
+  private lockedId: string | null = null;
+  private lockLeftAt: number | null = null;
   private history: { t: number; x: number; y: number }[] = [];
   private mouse: [number, number] | null = null;
   private headNeutral: { x: number; y: number } | null = null;
@@ -321,8 +326,15 @@ class GazeEngine {
       }
     } else this.snapper.reset();
 
+    // Midas-touch protection: a just-selected tile stays locked until the gaze has left it for 250 ms.
+    if (this.lockedId) {
+      if (snapId === this.lockedId) this.lockLeftAt = null;
+      else if ((this.lockLeftAt ??= t) && t - this.lockLeftAt > 250) this.lockedId = null;
+    }
+    const lockedHere = !!snapId && snapId === this.lockedId;
+
     // Selection.
-    if (blocked || t < this.cooldownUntil) {
+    if (blocked || t < this.cooldownUntil || lockedHere) {
       if (blocked) this.resetDwell();
       else this.progressMs = 0;
     } else if (s.selection === 'blink') {
@@ -416,6 +428,8 @@ class GazeEngine {
 
   private fire(reg: TargetReg, via: SelectEvent['via'], t: number, residualPx?: number) {
     this.cooldownUntil = t + 450;
+    this.lockedId = reg.repeatable ? null : reg.id;
+    this.lockLeftAt = null;
     this.resetDwell();
     selectTick();
     if (navigator.vibrate) navigator.vibrate(30);

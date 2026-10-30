@@ -14,6 +14,8 @@ export interface GazeTargetProps {
   dwellMs?: number;
   /** Stays selectable while tracking is paused (only the Pause tile). */
   pauseSafe?: boolean;
+  /** May be selected repeatedly without looking away (keys, steppers). */
+  repeatable?: boolean;
   disabled?: boolean;
 }
 
@@ -31,6 +33,7 @@ export function GazeTarget({
   variant = 'default',
   dwellMs,
   pauseSafe,
+  repeatable,
   disabled,
 }: GazeTargetProps) {
   const ref = useRef<HTMLButtonElement>(null);
@@ -46,8 +49,9 @@ export function GazeTarget({
       onSelect: () => cb.current(),
       dwellMs,
       pauseSafe,
+      repeatable,
     });
-  }, [id, label, dwellMs, pauseSafe]);
+  }, [id, label, dwellMs, pauseSafe, repeatable]);
 
   const hovered = useStore(gazeUi, (s) => s.hovered === id);
   const progress = useStore(gazeUi, (s) => (s.dwellId === id ? s.progress : 0));

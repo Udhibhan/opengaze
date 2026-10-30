@@ -31,6 +31,7 @@ export function Stepper({
       <div className="grid grid-cols-[1fr_1.2fr_1fr] items-center gap-2">
         <GazeTarget
           id={`${id}-dec`}
+          repeatable
           label={`Decrease ${label}`}
           onSelect={() => onChange(round(Math.max(min, value - step)))}
           disabled={value <= min}
@@ -45,6 +46,7 @@ export function Stepper({
         </div>
         <GazeTarget
           id={`${id}-inc`}
+          repeatable
           label={`Increase ${label}`}
           onSelect={() => onChange(round(Math.min(max, value + step)))}
           disabled={value >= max}
