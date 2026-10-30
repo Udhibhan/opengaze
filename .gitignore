@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+public/wasm/
+coverage/
+.DS_Store
+*.log
+benchmark-*.json

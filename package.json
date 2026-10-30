@@ -1,0 +1,20 @@
+{
+  "name": "opengaze",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Free, open-source, webcam-only eye-gaze communication (AAC) with Claude-powered replies.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n web,api -c cyan,magenta \"vite\" \"tsx watch server/index.ts\"",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "server": "tsx server/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -b",
+    "postinstall": "node scripts/copy-wasm.mjs",
+    "license-check": "node scripts/license-check.mjs",
+    "notices": "node scripts/license-check.mjs --notices",
+    "secret-scan": "node scripts/secret-scan.mjs"
+  }
+}
