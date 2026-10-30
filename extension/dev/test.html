@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>OpenGaze content-script test page</title>
+    <style>
+      body {
+        font: 18px system-ui;
+        margin: 40px;
+        height: 2400px;
+      }
+      #big {
+        position: absolute;
+        left: 200px;
+        top: 200px;
+        width: 240px;
+        height: 120px;
+        font-size: 22px;
+      }
+      #near a {
+        margin-right: 6px;
+      }
+      #near {
+        position: absolute;
+        left: 700px;
+        top: 220px;
+      }
+      #q {
+        position: absolute;
+        left: 200px;
+        top: 420px;
+        width: 300px;
+        font-size: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Dev-only harness: stubs the extension APIs and streams synthetic gaze frames to the content script. -->
+    <button id="big" onclick="this.textContent = 'Clicked ' + ++window.clicks">Big button</button>
+    <div id="near"><a href="#one">one</a><a href="#two">two</a><a href="#three">three</a></div>
+    <form
+      id="f"
+      onsubmit="
+        event.preventDefault();
+        document.title = 'searched:' + q.value;
+      "
+    >
+      <input id="q" placeholder="Search" />
+    </form>
+    <script>
+      window.clicks = 0;
+      const store = {};
+      const listeners = { msg: [], disc: [] };
+      const port = {
+        onMessage: { addListener: (f) => listeners.msg.push(f) },
+        onDisconnect: { addListener: (f) => listeners.disc.push(f) },
+        disconnect() {},
+      };
+      window.chrome = {
+        runtime: { id: 'test', lastError: undefined, connect: () => port },
+        storage: {
+          local: { get: async () => store, set: async (o) => Object.assign(store, o) },
+          onChanged: { addListener() {} },
+        },
+      };
+      // A "model" that ignores features and always predicts window.target (intercept-only ridge model).
+      const N = 11,
+        P = 11 + 10 + 2;
+      window.target = [320, 260];
+      function calib() {
+        return {
+          model: {
+            featMean: Array(N).fill(0),
+            featScale: Array(N).fill(1),
+            termMean: Array(P).fill(0),
+            w: Array.from({ length: P }, () => [0, 0]),
+            b: window.target.slice(),
+            lambda: 0.1,
+          },
+          headRef: { mean: { yaw: 0, pitch: 0, roll: 0, tx: 0, ty: 0, tz: -50 }, nose: { x: 0.5, y: 0.5 } },
+          accuracy: { meanPx: 40, p95Px: 90, meanDeg: 1.5, grade: 'Excellent' },
+          frame: { left: 0, top: 0, scale: 1 },
+          dpr: devicePixelRatio,
+          at: Date.now(),
+        };
+      }
+      Object.assign(store, { enabled: true, dwellMs: 600, calibration: calib() });
+      window.aim = (x, y) => {
+        window.target = [x, y];
+        store.calibration = calib();
+      };
+      document.hasFocus = () => true;
+      setInterval(() => {
+        // Make the "screen" frame match this viewport so the identity mapping holds.
+        store.calibration.frame = {
+          left: window.screenX + (window.outerWidth - window.innerWidth) / 2,
+          top: window.screenY + window.outerHeight - window.innerHeight - (window.outerWidth - window.innerWidth) / 2,
+          scale: 1,
+        };
+        store.calibration.model.b = window.target.slice();
+        const msg = {
+          type: 'frame',
+          t: performance.now(),
+          face: true,
+          v: Array(N).fill(0),
+          head: { yaw: 0, pitch: 0, roll: 0, tx: 0, ty: 0, tz: -50 },
+          blinkL: 0,
+          blinkR: 0,
+          nose: { x: 0.5, y: 0.5 },
+          eyeRatio: 0.15,
+        };
+        listeners.msg.forEach((f) => f(msg));
+      }, 33);
+    </script>
+    <script src="/dist-extension/content.js"></script>
+  </body>
+</html>

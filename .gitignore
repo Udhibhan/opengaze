@@ -9,3 +9,5 @@ coverage/
 .DS_Store
 *.log
 benchmark-*.json
+dist-extension/
+opengaze-extension.zip

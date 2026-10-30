@@ -115,6 +115,35 @@ cp .env.example .env        # optional: add ANTHROPIC_API_KEY for Claude replies
 npm run dev                 # Vite on http://localhost:5173 + reply proxy on :8787
 ```
 
+### Eye control for any website (Chrome extension)
+
+OpenGaze also ships as a Chrome extension that brings gaze control to **every website** (Gmail, YouTube,
+WhatsApp Web, news sites) with no changes to those sites.
+
+```bash
+npm run build:extension        # → dist-extension/ (+ opengaze-extension.zip)
+# optional, for Claude replies inside the extension's own app page:
+#   VITE_API_BASE=https://<your-app>.vercel.app npm run build:extension
+```
+
+1. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and pick `dist-extension/`.
+2. The OpenGaze app opens in a tab. Allow the camera and calibrate. When validation finishes, eye control turns on for
+   all websites. The toolbar popup has Start/Stop, recalibrate and dwell time.
+3. On any page:
+   - **Look at a link, button or field** and hold. A ring fills around it, then it's clicked.
+   - **Several small links close together?** OpenGaze asks with big numbered buttons instead of guessing (numbered
+     badges show which is which).
+   - **Text boxes** open a gaze keyboard with word prediction. Enter submits searches.
+   - **Dock on the right:** look-to-scroll up/down (no click needed), Back, Keyboard, and **Pause** (look for 2 s;
+     only Resume works while paused). A tiny face-position guide at the top turns green when you're centred.
+   - The same protections as the app apply: face-lost freeze, head-movement guard, look-away lock after each
+     selection, nothing fires when a new panel opens under your gaze, and drift correction learns from every click.
+
+How it works: a hidden *offscreen* extension page runs the webcam and MediaPipe once for the whole browser. It sends
+only numbers (gaze features, never images) to the content script in the focused tab, which maps them through your
+calibration to that page. `extension/dev/test.html` is a dev harness that feeds synthetic gaze to the content script
+(open it on the dev server after `npm run build:extension`).
+
 ### Deploy to Vercel
 
 The repo is Vercel-ready: the Vite app is served statically, and `api/suggest`, `api/complete` and `api/health` run as

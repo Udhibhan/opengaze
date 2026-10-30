@@ -33,6 +33,11 @@ export class Tracker {
   private lumaCanvas = document.createElement('canvas');
   private lastLuma = 0;
   delegate: 'GPU' | 'CPU' = 'GPU';
+  /**
+   * Optional frame scheduler. Hidden documents (the extension's offscreen page) don't get animation frames,
+   * so they supply a timer-driven scheduler instead.
+   */
+  scheduler: ((cb: () => void) => void) | null = null;
 
   constructor() {
     this.video = document.createElement('video');
@@ -103,7 +108,8 @@ export class Tracker {
     const v = this.video;
     const schedule = () => {
       const anyV = v as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number };
-      if (anyV.requestVideoFrameCallback) anyV.requestVideoFrameCallback(this.loop);
+      if (this.scheduler) this.scheduler(this.loop);
+      else if (anyV.requestVideoFrameCallback) anyV.requestVideoFrameCallback(this.loop);
       else requestAnimationFrame(this.loop);
     };
     if (v.readyState >= 2 && v.currentTime !== this.lastVideoTime && this.landmarker) {

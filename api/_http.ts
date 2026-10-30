@@ -6,6 +6,10 @@ export type Res = ServerResponse;
 
 export function json(res: Res, status: number, data: unknown) {
   res.statusCode = status;
+  // Allow the OpenGaze browser extension's own page to call the reply service.
+  res.setHeader('access-control-allow-origin', '*');
+  res.setHeader('access-control-allow-headers', 'content-type');
+  res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
   res.setHeader('content-type', 'application/json');
   res.setHeader('cache-control', 'no-store');
   res.end(JSON.stringify(data));

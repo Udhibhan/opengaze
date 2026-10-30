@@ -24,11 +24,14 @@ export interface Turn {
 const kindOf = (source: string): 'paid' | 'cached' | 'offline' =>
   source === 'claude' ? 'paid' : source === 'cache' ? 'cached' : 'offline';
 
+/** Empty for same-origin (local proxy / Vercel); set VITE_API_BASE when the app runs inside the extension. */
+const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') ?? '';
+
 async function post<T>(path: string, body: unknown, timeoutMs: number): Promise<T> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   try {
-    const r = await fetch(path, {
+    const r = await fetch(API_BASE + path, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
@@ -86,7 +89,7 @@ export async function completeSentence(
 
 export async function serverHealth(): Promise<{ ok: boolean; ai: boolean; model: string }> {
   try {
-    const r = await fetch('/api/health');
+    const r = await fetch(`${API_BASE}/api/health`);
     return await r.json();
   } catch {
     return { ok: false, ai: false, model: '' };

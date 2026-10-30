@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>OpenGaze</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        width: 320px;
+        padding: 16px;
+        background: #0b1530;
+        color: #f6f2e9;
+        font:
+          15px/1.4 system-ui,
+          sans-serif;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 22px;
+      }
+      h1 span {
+        color: #f5b248;
+      }
+      p {
+        margin: 4px 0;
+        color: #c9d0e0;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      button {
+        flex: 1;
+        padding: 12px;
+        border-radius: 12px;
+        border: 2px solid #3a4e7c;
+        background: #142246;
+        color: inherit;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button.primary {
+        background: #f5b248;
+        color: #1b1200;
+        border-color: #f5b248;
+      }
+      .status {
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: #142246;
+      }
+      .ok {
+        color: #78dea8;
+      }
+      .warn {
+        color: #f5b248;
+      }
+      .bad {
+        color: #f88078;
+      }
+      .dwell {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .dwell button {
+        flex: 0 0 48px;
+      }
+      .dwell b {
+        flex: 1;
+        text-align: center;
+        font-size: 18px;
+      }
+      small {
+        display: block;
+        margin-top: 12px;
+        color: #c9d0e0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Open<span>Gaze</span></h1>
+    <p>Eye control for any website.</p>
+    <div class="status" id="status">Loading…</div>
+    <div class="row">
+      <button id="toggle" class="primary">Start eye control</button>
+    </div>
+    <div class="row">
+      <button id="calibrate">Set up / calibrate</button>
+    </div>
+    <div class="dwell">
+      <button id="dwell-dec" aria-label="Shorter dwell">−</button>
+      <b id="dwell">0.9 s dwell</b>
+      <button id="dwell-inc" aria-label="Longer dwell">+</button>
+    </div>
+    <small
+      >Video is processed on this device and never stored or uploaded. On a page, look at the dock on the right to
+      scroll, go back, type or pause.</small
+    >
+    <script type="module" src="./src/popup.ts"></script>
+  </body>
+</html>

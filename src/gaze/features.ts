@@ -17,6 +17,9 @@ export interface LandmarkLike {
 export const EYE_A = { left: 33, right: 133, upper: 159, lower: 145, iris: [468, 469, 470, 471, 472] };
 export const EYE_B = { left: 362, right: 263, upper: 386, lower: 374, iris: [473, 474, 475, 476, 477] };
 export const NOSE_TIP = 1;
+
+/** How far the head may move from its calibrated pose (rad / cm) before selections pause. */
+export const HEAD_LIMITS = { yaw: 0.24, pitch: 0.2, tx: 6, ty: 5, tz: 14 };
 export const IRIS_POINTS = [...EYE_A.iris, ...EYE_B.iris];
 
 export interface HeadPose {

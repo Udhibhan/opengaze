@@ -8,10 +8,11 @@ import { Snapper, centre, type Rect } from './snap';
 import { DriftCorrector } from './drift';
 import { LongBlinkDetector } from './blink';
 import type { AccuracyReport } from './accuracy';
-import type { HeadPose } from './features';
+import { HEAD_LIMITS, type HeadPose } from './features';
 import { createStore } from '../lib/store';
 import { settings, smootherParams } from '../lib/settings';
 import { selectTick } from '../lib/sound';
+import { saveCalibrationToExtension } from '../lib/extensionBridge';
 
 export type Status = 'off' | 'uncalibrated' | 'tracking' | 'paused' | 'face-lost' | 'head-out';
 export type Distance = 'ok' | 'far' | 'close' | null;
@@ -68,8 +69,6 @@ interface TargetReg {
   /** Can be selected again without looking away first (keyboard keys, steppers). */
   repeatable?: boolean;
 }
-
-const HEAD_LIMITS = { yaw: 0.24, pitch: 0.2, tx: 6, ty: 5, tz: 14 };
 
 export const gazeUi = createStore<GazeUi>({
   status: 'off',
@@ -451,6 +450,7 @@ class GazeEngine {
     } catch {
       /* ignore */
     }
+    if (this.model && this.headRef) saveCalibrationToExtension(this.model, this.headRef, gazeUi.get().accuracy);
   }
 
   private restore() {
