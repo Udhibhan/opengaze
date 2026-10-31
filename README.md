@@ -135,7 +135,15 @@ npm run build:extension        # → dist-extension/ (+ opengaze-extension.zip)
    heavy smoothing plus a soft dead zone, so a still head gives a perfectly still pointer. The popup sets how much
    head movement is needed (small / medium / large) and re-centres. There is also a Re-centre tile in the dock.
    **Eyes mode** (popup → Eyes) uses the calibrated eye-gaze model instead. Calibrate in the OpenGaze tab first.
-4. On any page:
+4. **Grid mode** (on by default with Eyes; popup → Grid Auto/On/Off): the page is split into a few big blocks
+   sized from your measured accuracy, each labelled with how many things it holds. The pointer jumps from block to
+   block. Dwell on a block: if it holds one link it's clicked, otherwise its links appear as big numbered buttons
+   (with **More** pages). This two-step "pick a region, then pick the item" method makes webcam eye gaze usable even
+   with ±100 px error.
+5. **Camera on pages:** a small live camera view with the centring oval sits at the top of the dock. It grows,
+   with a plain instruction, when your face is lost or out of position. Thumbnails go only to the focused tab's
+   overlay, which uses a closed shadow root so the website can't read them; switch off in the popup.
+6. On any page:
    - **Look at a link, button or field** and hold. A ring fills around it, then it's clicked.
    - **Several small links close together?** OpenGaze asks with big numbered buttons instead of guessing (numbered
      badges show which is which).

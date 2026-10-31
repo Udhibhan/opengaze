@@ -11,6 +11,10 @@ export interface Tile {
   pauseSafe?: boolean;
   /** May fire again without looking away (keyboard keys). */
   repeatable?: boolean;
+  /** A grid-mode block of the page (big, so no drift learning; slightly longer dwell). */
+  cell?: boolean;
+  /** Not selectable right now (e.g. a grid block with nothing clickable in it). */
+  disabled?: boolean;
 }
 
 const CSS = `
@@ -28,8 +32,22 @@ const CSS = `
 .tile small { display: block; font-weight: 400; font-size: 12px; color: #c9d0e0; }
 .dock { position: fixed; right: 10px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column;
   gap: 8px; width: 112px; }
-.face { pointer-events: none; height: 64px; border-radius: 14px; background: rgba(11,21,48,.92);
-  border: 2px solid #3a4e7c; display: flex; align-items: center; justify-content: center; }
+.face { pointer-events: none; position: relative; height: 63px; border-radius: 14px; background: #000;
+  border: 2px solid #3a4e7c; overflow: hidden; }
+.face img, .cambig img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.face .ov, .cambig .ov { position: absolute; inset: 0; }
+.face .ov svg, .cambig .ov svg { width: 100%; height: 100%; }
+.cambig { position: fixed; left: 50%; top: 70px; transform: translateX(-50%); width: 360px; border-radius: 18px;
+  overflow: hidden; background: #000; border: 3px solid #f5b248; display: none; }
+.cambig .frame { position: relative; width: 360px; height: 203px; }
+.cambig .hint { padding: 8px 12px; background: rgba(11,21,48,.96); text-align: center; font-size: 19px; }
+.gridlayer { position: fixed; inset: 0; pointer-events: none; }
+.cell { position: fixed; border: 2px dashed rgba(245,178,72,.28); border-radius: 16px; display: flex;
+  align-items: flex-start; justify-content: flex-end; padding: 6px; transition: background .15s, border-color .15s; }
+.cell.hover { border: 3px solid #f5b248; background: rgba(245,178,72,.10); box-shadow: inset 0 0 0 2px rgba(245,178,72,.25); }
+.cell.dim { border-color: rgba(160,170,190,.12); }
+.cell .n { font-size: 14px; padding: 2px 8px; border-radius: 10px; background: rgba(11,21,48,.85); color: #f5b248; }
+.cell.dim .n { display: none; }
 .cursor { position: fixed; left: 0; top: 0; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%;
   background: radial-gradient(circle, rgba(245,178,72,.95) 0 28%, rgba(245,178,72,.35) 45%, rgba(245,178,72,0) 70%);
   box-shadow: 0 0 22px 6px rgba(245,178,72,.35); opacity: 0; transition: opacity .2s, transform .14s ease-out; will-change: transform; }
@@ -64,6 +82,13 @@ export interface Ui {
   toast: HTMLElement;
   dock: HTMLElement;
   face: HTMLElement;
+  faceImg: HTMLImageElement;
+  faceOv: HTMLElement;
+  camBig: HTMLElement;
+  camBigImg: HTMLImageElement;
+  camBigOv: HTMLElement;
+  camBigHint: HTMLElement;
+  grid: HTMLElement;
   scrim: HTMLElement;
   chooser: HTMLElement;
   badges: HTMLElement;
@@ -77,10 +102,14 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text 
   return e;
 }
 
-export function buildUi(): Ui {
+/**
+ * @param open use an open shadow root (dev harness only). Normally it's closed so the page's own scripts
+ *             can't reach into the overlay, which shows the camera thumbnail.
+ */
+export function buildUi(open = false): Ui {
   const host = h('div');
   host.id = 'opengaze-overlay';
-  const shadow = host.attachShadow({ mode: 'open' });
+  const shadow = host.attachShadow({ mode: open ? 'open' : 'closed' });
   const style = h('style');
   style.textContent = CSS;
   const root = h('div', 'root');
@@ -92,15 +121,48 @@ export function buildUi(): Ui {
   const toast = h('div', 'toast');
   const dock = h('div', 'dock');
   const face = h('div', 'face');
+  const faceImg = h('img');
+  faceImg.alt = '';
+  const faceOv = h('div', 'ov');
+  face.append(faceImg, faceOv);
   dock.append(face);
+  const camBig = h('div', 'cambig');
+  const camFrame = h('div', 'frame');
+  const camBigImg = h('img');
+  camBigImg.alt = '';
+  const camBigOv = h('div', 'ov');
+  const camBigHint = h('div', 'hint');
+  camFrame.append(camBigImg, camBigOv);
+  camBig.append(camFrame, camBigHint);
+  const grid = h('div', 'gridlayer');
   const scrim = h('div', 'scrim');
   const chooser = h('div', 'chooser');
   const badges = h('div');
   const kb = h('div', 'kb');
   const cursor = h('div', 'cursor');
-  root.append(outline, badges, dock, kb, scrim, chooser, ring, toast, cursor);
+  root.append(grid, outline, badges, dock, kb, scrim, chooser, camBig, ring, toast, cursor);
   (document.documentElement || document.body).append(host);
-  return { host, root, cursor, ring, outline, toast, dock, face, scrim, chooser, badges, kb };
+  return {
+    host,
+    root,
+    cursor,
+    ring,
+    outline,
+    toast,
+    dock,
+    face,
+    faceImg,
+    faceOv,
+    camBig,
+    camBigImg,
+    camBigOv,
+    camBigHint,
+    grid,
+    scrim,
+    chooser,
+    badges,
+    kb,
+  };
 }
 
 /** Creates a tile element with a label and optional sub-label. */
@@ -148,7 +210,7 @@ export function drawFace(
   const col = !nose ? '#f88078' : good ? '#78dea8' : '#f5b248';
   // Mirrored so it reads like a mirror.
   const dot = nose ? `<circle cx="${(1 - nose.x) * 96}" cy="${nose.y * 54}" r="4" fill="${col}"/>` : '';
-  el.innerHTML = `<svg width="96" height="54" viewBox="0 0 96 54" aria-hidden="true">
+  el.innerHTML = `<svg viewBox="0 0 96 54" preserveAspectRatio="none" aria-hidden="true">
     <ellipse cx="${(1 - home.x) * 96}" cy="${home.y * 54}" rx="11" ry="16" fill="none" stroke="${col}" stroke-width="2.5"
       ${good ? '' : 'stroke-dasharray="4 3"'}/>${dot}</svg>`;
   el.title = !nose ? 'Face not visible' : good ? 'Good position' : 'Re-centre your head';

@@ -10,9 +10,17 @@ import { HEAD_RANGES, headToScreen, NeutralCapture, Steady, type HeadRange, type
 import { FixationFilter, fixationParams } from '../../src/gaze/fixation';
 import { predictWords } from '../../src/lib/predict';
 import type { StoredCalibration } from '../../src/lib/extensionBridge';
-import { GAZE_PORT, type FrameMsg } from './protocol';
+import { GAZE_PORT, type FrameMsg, type PreviewMsg } from './protocol';
 import { buildUi, drawFace, drawRing, h, tileEl, type Tile, type Ui } from './content/ui';
-import { candidatesNear, clickElement, isEditable, labelFor, scrollerAtCentre, type Candidate } from './content/pick';
+import {
+  candidatesNear,
+  clickablesIn,
+  clickElement,
+  isEditable,
+  labelFor,
+  scrollerAtCentre,
+  type Candidate,
+} from './content/pick';
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 const KEYS = 'etaoinshrdlucmwfgypbvkjxqz'.split('').concat(['.', ',', '?', "'"]);
@@ -38,6 +46,11 @@ function start() {
   let mountedMode: 'head' | 'eyes' | null = null;
   const steady = new Steady(6);
   const fixation = new FixationFilter();
+  /** Grid mode: the page is split into a few big blocks; pick a block, then pick from its links as big buttons. */
+  let gridSetting: 'auto' | 'on' | 'off' = 'auto';
+  let showCamera = true;
+  let cellTiles: Tile[] = [];
+  const gridOn = () => gridSetting === 'on' || (gridSetting === 'auto' && pointer === 'eyes');
   let ui: Ui | null = null;
   let port: chrome.runtime.Port | null = null;
   let retry = 0;
@@ -62,7 +75,7 @@ function start() {
   let candsAt = 0;
   let hoverEl: HTMLElement | null = null;
   /** New UI appeared under the gaze: nothing may fire until the gaze moves away from this point. */
-  let holdUntilMoved: [number, number] | null = null;
+  let holdUntilMoved: { x: number; y: number; tile?: Tile | null } | null = null;
 
   // Tiles: the dock is always active; a modal (chooser) replaces everything; the keyboard adds its keys.
   let dockTiles: Tile[] = [];
@@ -83,7 +96,17 @@ function start() {
   };
 
   async function load() {
-    const s = (await chrome.storage.local.get(['enabled', 'calibration', 'dwellMs', 'pointer', 'headRange'])) as {
+    const s = (await chrome.storage.local.get([
+      'enabled',
+      'calibration',
+      'dwellMs',
+      'pointer',
+      'headRange',
+      'grid',
+      'showCamera',
+    ])) as {
+      grid?: 'auto' | 'on' | 'off';
+      showCamera?: boolean;
       enabled?: boolean;
       calibration?: StoredCalibration;
       dwellMs?: number;
@@ -95,6 +118,8 @@ function start() {
     dwellMs = s.dwellMs ?? 1000;
     pointer = s.pointer ?? 'head';
     headRange = s.headRange ?? 'medium';
+    gridSetting = s.grid ?? 'auto';
+    showCamera = s.showCamera ?? true;
     apply();
   }
 
@@ -108,7 +133,9 @@ function start() {
       steady.px = 6;
       fixation.configure(fixationParams(4, calib?.accuracy?.p95Px ?? null));
       if (pointer === 'head' && !neutral && !capture) startCapture();
+      layoutGrid();
       connect();
+      port?.postMessage({ type: 'want-preview', on: showCamera });
     } else teardown();
   }
 
@@ -121,10 +148,18 @@ function start() {
       port = null;
       return;
     }
-    port.onMessage.addListener((m: FrameMsg) => {
+    port.onMessage.addListener((m: FrameMsg | PreviewMsg) => {
       retry = 0;
+      if (m.type === 'preview') {
+        if (ui && showCamera) {
+          ui.faceImg.src = m.url;
+          if (ui.camBig.style.display === 'block') ui.camBigImg.src = m.url;
+        }
+        return;
+      }
       onFrame(m);
     });
+    port.postMessage({ type: 'want-preview', on: showCamera });
     port.onDisconnect.addListener(() => {
       void chrome.runtime.lastError;
       port = null;
@@ -143,6 +178,7 @@ function start() {
     mountedMode = null;
     dockTiles = [];
     kbTiles = [];
+    cellTiles = [];
     modalTiles = null;
   }
 
@@ -165,6 +201,11 @@ function start() {
     if (ch.pointer) pointer = (ch.pointer.newValue as 'head' | 'eyes') ?? 'head';
     if (ch.headRange) headRange = (ch.headRange.newValue as HeadRange) ?? 'medium';
     if (ch.recentreAt) startCapture();
+    if (ch.grid) gridSetting = (ch.grid.newValue as 'auto' | 'on' | 'off') ?? 'auto';
+    if (ch.showCamera) {
+      showCamera = ch.showCamera.newValue !== false;
+      if (ui && !showCamera) ui.faceImg.removeAttribute('src');
+    }
     apply();
   });
   window.addEventListener('keydown', (e) => {
@@ -187,7 +228,7 @@ function start() {
   }
 
   function mountUi() {
-    ui = buildUi();
+    ui = buildUi(harness);
     mountedMode = pointer;
     const dockH = clamp((innerHeight - 140) / (pointer === 'head' ? 6.4 : 5.4), 64, 96);
     const mk = (label: string, sub: string, t: Omit<Tile, 'el'>, cls = '') => {
@@ -263,15 +304,23 @@ function start() {
 
   // ---------- chooser (several small targets close together) ----------
 
-  function openChooser(items: { label: string; sub?: string; run: () => void; el?: HTMLElement }[]) {
+  type ChoiceItem = { label: string; sub?: string; run: () => void; el?: HTMLElement };
+
+  /** Big-button chooser; long lists are paged (8 per page, or 7 + "More"). */
+  function openChooser(items: ChoiceItem[], page = 0) {
     if (!ui) return;
     closeChooser();
     ui.scrim.style.display = 'block';
     ui.chooser.style.display = 'grid';
+    ui.grid.style.display = 'none';
     modalTiles = [];
-    items.forEach((it, i) => {
+    const perPage = items.length <= 8 ? 8 : 7;
+    const pages = Math.ceil(items.length / perPage);
+    const shown = items.slice(page * perPage, page * perPage + perPage);
+    shown.forEach((it, i) => {
       const el = h('div', 'tile');
       el.setAttribute('role', 'button');
+      el.setAttribute('aria-label', it.label);
       el.append(h('span', 'num', String(i + 1)), h('span', '', it.label));
       if (it.sub) el.append(h('small', '', it.sub));
       ui!.chooser.append(el);
@@ -291,6 +340,11 @@ function start() {
         ui!.badges.append(b);
       }
     });
+    if (pages > 1) {
+      const more = tileEl('More ▸', `page ${page + 1} of ${pages}`, 'primary');
+      ui.chooser.append(more);
+      modalTiles.push(makeTile(more, { action: () => openChooser(items, (page + 1) % pages) }));
+    }
     const cancel = tileEl('Cancel', 'nothing selected', 'danger');
     ui.chooser.append(cancel);
     modalTiles.push(makeTile(cancel, { action: closeChooser }));
@@ -305,18 +359,96 @@ function start() {
     ui.chooser.style.display = 'none';
     ui.scrim.style.display = 'none';
     modalTiles = null;
+    ui.grid.style.display = gridOn() ? 'block' : 'none';
+    if (gridOn()) refreshGrid();
+    // The gaze is still where the chosen button was: don't let the block underneath fire until it moves.
+    holdGaze();
   }
 
+  const itemFor = (el: HTMLElement): ChoiceItem => ({
+    label: labelFor(el),
+    sub: el instanceof HTMLAnchorElement ? 'link' : isEditable(el) ? 'text box' : '',
+    el,
+    run: () => activate(el),
+  });
+
   function chooseFrom(cs: Candidate[]) {
-    openChooser(
-      cs.slice(0, 5).map((c) => ({
-        label: labelFor(c.el),
-        sub: c.el instanceof HTMLAnchorElement ? 'link' : isEditable(c.el) ? 'text box' : '',
-        el: c.el,
-        run: () => activate(c.el),
-      })),
-    );
+    openChooser(cs.map((c) => itemFor(c.el)));
   }
+
+  // ---------- grid mode ----------
+
+  /** Splits the visible page (left of the dock, above the keyboard) into big blocks sized from accuracy. */
+  function layoutGrid() {
+    if (!ui) return;
+    ui.grid.replaceChildren();
+    cellTiles = [];
+    if (!gridOn()) {
+      ui.grid.style.display = 'none';
+      return;
+    }
+    ui.grid.style.display = modalTiles ? 'none' : 'block';
+    const p95 = pointer === 'head' ? 60 : (calib?.accuracy?.p95Px ?? 160);
+    const right = innerWidth - 136;
+    const kbTop = kbTarget ? ui.kb.getBoundingClientRect().top - 8 : innerHeight;
+    const W = right - 8;
+    const H = kbTop - 8;
+    const cols = clamp(Math.floor(W / Math.max(280, 2.2 * p95)), 2, 5);
+    const rows = clamp(Math.floor(H / Math.max(200, 2.0 * p95)), 1, 4);
+    const gap = 8;
+    const cw = (W - gap * (cols - 1)) / cols;
+    const ch = (H - gap * (rows - 1)) / rows;
+    for (let r = 0; r < rows; r++)
+      for (let k = 0; k < cols; k++) {
+        const el = h('div', 'cell');
+        Object.assign(el.style, {
+          left: `${8 + k * (cw + gap)}px`,
+          top: `${8 + r * (ch + gap)}px`,
+          width: `${cw}px`,
+          height: `${ch}px`,
+        });
+        el.append(h('span', 'n'));
+        ui.grid.append(el);
+        const tile: Tile = { el, cell: true, action: () => openCell(tile) };
+        cellTiles.push(tile);
+      }
+    refreshGrid();
+  }
+
+  /** A block's catchment area: its rect plus half the gap on each side, so nothing falls between blocks. */
+  function zone(t: Tile) {
+    const r = t.el.getBoundingClientRect();
+    return { left: r.left - 5, top: r.top - 5, right: r.right + 5, bottom: r.bottom + 5 };
+  }
+
+  /** Marks which blocks have anything to click (and how many), so empty blocks never fire. */
+  function refreshGrid() {
+    if (!ui) return;
+    for (const t of cellTiles) {
+      const n = clickablesIn(zone(t), ui.host, false).length;
+      t.disabled = n === 0;
+      t.el.classList.toggle('dim', n === 0);
+      (t.el.firstChild as HTMLElement).textContent = n === 1 ? '1 item' : `${n} items`;
+    }
+  }
+
+  function openCell(tile: Tile) {
+    if (!ui) return;
+    const els = clickablesIn(zone(tile), ui.host);
+    if (!els.length) return toast('Nothing to click in this block');
+    if (els.length === 1) return activate(els[0]);
+    openChooser(els.map(itemFor));
+  }
+
+  let gridTimer = 0;
+  const scheduleGrid = (relayout = false) => {
+    clearTimeout(gridTimer);
+    gridTimer = window.setTimeout(() => (relayout ? layoutGrid() : refreshGrid()), 150);
+  };
+  window.addEventListener('scroll', () => scheduleGrid(), { passive: true, capture: true });
+  window.addEventListener('resize', () => scheduleGrid(true));
+  // Pages change (infinite scroll, menus opening): keep block counts fresh.
+  setInterval(() => ui && cellTiles.length && !modalTiles && refreshGrid(), 1500);
 
   // ---------- activation ----------
 
@@ -403,6 +535,7 @@ function start() {
     add(ar, 'Delete word', delWord, 'act', true);
     add(ar, 'Enter / Search', enter, 'act primary');
     kb.style.display = 'flex';
+    layoutGrid();
     holdGaze();
     // Keep the text box visible above the keyboard.
     const er = el.getBoundingClientRect();
@@ -417,6 +550,7 @@ function start() {
     ui.kb.replaceChildren();
     kbTiles = [];
     kbTarget = null;
+    layoutGrid();
   }
 
   function focusTarget() {
@@ -501,7 +635,7 @@ function start() {
 
   function activeTiles(): Tile[] {
     if (modalTiles) return modalTiles;
-    const all = [...dockTiles, ...kbTiles];
+    const all = [...dockTiles, ...kbTiles, ...(gridOn() ? cellTiles : [])];
     return paused ? all.filter((t) => t.pauseSafe) : all;
   }
 
@@ -514,9 +648,11 @@ function start() {
       const dx = Math.max(r.left - x, 0, x - r.right);
       const dy = Math.max(r.top - y, 0, y - r.bottom);
       const d = Math.hypot(dx, dy);
-      if (d > pad) continue;
+      if (t.disabled) continue;
+      // Grid blocks tile the page (gaps go to the nearest block); dock/keyboard tiles get more padding.
+      if (d > (t.cell ? 5 : pad)) continue;
       const cd = Math.hypot(r.left + r.width / 2 - x, r.top + r.height / 2 - y) / Math.max(r.width, r.height);
-      const score = d * 4 + cd;
+      const score = d * 4 + cd + (t.cell ? 10 : 0);
       if (score < bestD) {
         bestD = score;
         best = t;
@@ -545,8 +681,27 @@ function start() {
     toast('Look at the middle of the screen and hold still…', 1500);
   }
 
+  /** Small camera box in the dock; a big one with a plain instruction when position needs fixing. */
+  function showFace(
+    nose: { x: number; y: number } | null,
+    home: { x: number; y: number },
+    good: boolean,
+    bigHint: string,
+  ) {
+    if (!ui) return;
+    drawFace(ui.faceOv, nose, home, good);
+    if (bigHint && showCamera) {
+      ui.camBig.style.display = 'block';
+      ui.camBigHint.textContent = bigHint;
+      drawFace(ui.camBigOv, nose, home, good);
+      if (ui.faceImg.src) ui.camBigImg.src = ui.faceImg.src;
+    } else ui.camBig.style.display = 'none';
+  }
+
   function holdGaze() {
-    holdUntilMoved = smooth ? [smooth[0], smooth[1]] : null;
+    // The tile under the gaze is captured on the next frame; the hold ends when the gaze reaches a different
+    // tile/block or moves well away (a small cursor shift from drift correction isn't enough).
+    holdUntilMoved = smooth ? { x: smooth[0], y: smooth[1] } : null;
     progressMs = 0;
   }
 
@@ -579,12 +734,18 @@ function start() {
     const home = (pointer === 'eyes' && calib?.headRef.nose) || { x: 0.5, y: 0.5 };
     if (!m.face || !m.v) {
       faceLostSince ??= t;
-      drawFace(ui.face, null, home, false);
+      showFace(
+        null,
+        home,
+        false,
+        t - faceLostSince > 300 ? "I can't see your face. Move back into the camera view." : '',
+      );
       if (t - faceLostSince > 300) {
         resetDwell();
         ui.cursor.style.opacity = '0';
         drawRing(ui.ring, 0, 0, 0, 0, 0);
-        if (t - faceLostSince > 1500) toast("I can't see your face. Nothing will be clicked until you're back.", 1200);
+        if (!showCamera && t - faceLostSince > 1500)
+          toast("I can't see your face. Nothing will be clicked until you're back.", 1200);
       }
       return;
     }
@@ -596,9 +757,14 @@ function start() {
     } else headOutSince = null;
     const ratioOk = m.eyeRatio === undefined || (m.eyeRatio > 0.085 && m.eyeRatio < 0.3);
     const centred = !!m.nose && Math.abs(m.nose.x - home.x) < 0.07 && Math.abs(m.nose.y - home.y) < 0.08;
-    drawFace(ui.face, m.nose ?? null, home, !headOut && ratioOk && centred);
+    showFace(
+      m.nose ?? null,
+      home,
+      !headOut && ratioOk && centred,
+      headOut ? 'Move your head back to the oval (where it was during calibration)' : '',
+    );
     if (headOut) {
-      toast('Gently move your head back to where it was during calibration', 1000);
+      if (!showCamera) toast('Gently move your head back to where it was during calibration', 1000);
       resetDwell();
     }
 
@@ -653,14 +819,28 @@ function start() {
     const R2 = clamp(0.9 * p95, 40, 160); // candidate search radius
     const pad = clamp(0.5 * p95, 16, 70); // tile padding
 
-    const tile = blocked ? null : nearestTile(x, y, pad);
+    let tile = blocked ? null : nearestTile(x, y, pad);
+    // Grid blocks are sticky: stay on the current block until the gaze is well inside another one.
+    if (
+      anchor?.kind === 'tile' &&
+      tile !== anchor.tile &&
+      anchor.tile.cell &&
+      !anchor.tile.disabled &&
+      (!tile || tile.cell)
+    ) {
+      const r = anchor.tile.el.getBoundingClientRect();
+      const m = 0.18 * Math.min(r.width, r.height);
+      if (!blocked && x > r.left - m && x < r.right + m && y > r.top - m && y < r.bottom + m) tile = anchor.tile;
+    }
     setHover(tile?.el ?? null);
 
     // Cursor (magnetised toward a hovered tile).
     let cxy: [number, number] = [x, y];
     if (tile) {
       const r = tile.el.getBoundingClientRect();
-      cxy = [x + (r.left + r.width / 2 - x) * 0.6, y + (r.top + r.height / 2 - y) * 0.6];
+      // Blocky movement: on a grid block the cursor sits at the block's centre.
+      const pull = tile.cell ? 1 : 0.6;
+      cxy = [x + (r.left + r.width / 2 - x) * pull, y + (r.top + r.height / 2 - y) * pull];
     }
     ui.cursor.style.opacity = paused ? '0.35' : '1';
     ui.cursor.style.transform = `translate(${cxy[0]}px, ${cxy[1]}px)`;
@@ -691,7 +871,7 @@ function start() {
       return;
     }
 
-    const pagePointsAllowed = !paused && !modalTiles;
+    const pagePointsAllowed = !paused && !modalTiles && !gridOn();
     if (tile) {
       if (!(anchor?.kind === 'tile' && anchor.tile === tile)) {
         anchor = { kind: 'tile', tile };
@@ -717,13 +897,19 @@ function start() {
       (lock.kind === 'tile'
         ? anchor.kind === 'tile' && anchor.tile === lock.tile && !anchor.tile.repeatable
         : anchor.kind === 'point' && Math.hypot(anchor.x - lock.x, anchor.y - lock.y) < R);
-    if (holdUntilMoved && Math.hypot(x - holdUntilMoved[0], y - holdUntilMoved[1]) > R) holdUntilMoved = null;
+    if (holdUntilMoved) {
+      if (holdUntilMoved.tile === undefined) holdUntilMoved.tile = tile;
+      const moved = Math.hypot(x - holdUntilMoved.x, y - holdUntilMoved.y) > 2 * R;
+      if (moved || (tile && tile !== holdUntilMoved.tile)) holdUntilMoved = null;
+    }
     const held = !!holdUntilMoved;
     const hasTarget = !held && (anchor?.kind === 'tile' || (anchor?.kind === 'point' && cands.length > 0));
     const still = pointer !== 'eyes' || fixation.fixating;
     if (anchor && hasTarget && !closed && still && !lockedHere && t >= cooldownUntil) progressMs += dt * 1000;
 
-    const need = anchor?.kind === 'tile' ? (anchor.tile.dwellMs ?? dwellMs) : dwellMs;
+    // Blocks get a slightly longer dwell, so reading a page doesn't keep opening them.
+    const need =
+      anchor?.kind === 'tile' ? (anchor.tile.dwellMs ?? (anchor.tile.cell ? dwellMs * 1.2 : dwellMs)) : dwellMs;
     const progress = hasTarget && !lockedHere ? clamp(progressMs / need, 0, 1) : 0;
 
     // Feedback: ring around the tile / the single clear page target, or a circle when it's ambiguous.
@@ -768,7 +954,7 @@ function start() {
     progressMs = 0;
     const raw = recentRaw(t);
     if (a.kind === 'tile') {
-      if (raw) {
+      if (raw && !a.tile.cell) {
         const r = a.tile.el.getBoundingClientRect();
         drift.observe(raw[0], raw[1], r.left + r.width / 2, r.top + r.height / 2);
       }

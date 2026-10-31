@@ -11,7 +11,11 @@ async function render() {
     'dwellMs',
     'pointer',
     'headRange',
+    'grid',
+    'showCamera',
   ])) as {
+    grid?: string;
+    showCamera?: boolean;
     enabled?: boolean;
     calibration?: StoredCalibration;
     camera?: { ok: boolean; error: string };
@@ -26,6 +30,9 @@ async function render() {
   for (const b of document.querySelectorAll<HTMLButtonElement>('[data-range]'))
     b.setAttribute('aria-pressed', String(b.dataset.range === (s.headRange ?? 'medium')));
 
+  for (const b of document.querySelectorAll<HTMLButtonElement>('[data-grid]'))
+    b.setAttribute('aria-pressed', String(b.dataset.grid === (s.grid ?? 'auto')));
+  $('camera').setAttribute('aria-pressed', String(s.showCamera !== false));
   const lines: string[] = [];
   if (pointer === 'head') lines.push('Head pointer: no eye calibration needed.');
   else if (!s.calibration) lines.push('<span class="warn">Eyes not calibrated yet.</span> Open setup to calibrate.');
@@ -55,6 +62,12 @@ $('mode-eyes').addEventListener('click', () => void chrome.storage.local.set({ p
 $('recentre').addEventListener('click', () => void chrome.storage.local.set({ recentreAt: Date.now() }));
 for (const b of document.querySelectorAll<HTMLButtonElement>('[data-range]'))
   b.addEventListener('click', () => void chrome.storage.local.set({ headRange: b.dataset.range }));
+for (const b of document.querySelectorAll<HTMLButtonElement>('[data-grid]'))
+  b.addEventListener('click', () => void chrome.storage.local.set({ grid: b.dataset.grid }));
+$('camera').addEventListener('click', async () => {
+  const { showCamera } = await chrome.storage.local.get('showCamera');
+  await chrome.storage.local.set({ showCamera: showCamera === false });
+});
 $('calibrate').addEventListener('click', () => void chrome.runtime.sendMessage({ type: 'og-open-app' }));
 for (const [id, d] of [
   ['dwell-dec', -100],

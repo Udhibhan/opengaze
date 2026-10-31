@@ -51,6 +51,28 @@ function onTop(el: HTMLElement, r: DOMRect): boolean {
   return !!top && (top === el || el.contains(top) || top.contains(el));
 }
 
+/** All interactive elements whose centre lies inside the rect, in reading order (top-to-bottom, left-to-right). */
+export function clickablesIn(
+  rect: { left: number; top: number; right: number; bottom: number },
+  overlay: Element,
+  checkTop = true,
+): HTMLElement[] {
+  const out: { el: HTMLElement; r: DOMRect }[] = [];
+  for (const node of document.querySelectorAll<HTMLElement>(CLICKABLE)) {
+    if (overlay.contains(node)) continue;
+    const r = node.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    if (cx < rect.left || cx > rect.right || cy < rect.top || cy > rect.bottom) continue;
+    if (!visible(node, r)) continue;
+    out.push({ el: node, r });
+  }
+  const filtered = out.filter((c) => !out.some((o) => o !== c && o.el.contains(c.el)));
+  const rows = (c: { r: DOMRect }) => Math.round(c.r.top / 24);
+  filtered.sort((a, b) => rows(a) - rows(b) || a.r.left - b.r.left);
+  return (checkTop ? filtered.filter((c) => onTop(c.el, c.r)) : filtered).map((c) => c.el);
+}
+
 /** Interactive elements within `radius` px of (x, y), nearest first, de-duplicated (outermost clickable wins). */
 export function candidatesNear(x: number, y: number, radius: number, overlay: Element): Candidate[] {
   const out: Candidate[] = [];

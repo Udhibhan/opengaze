@@ -16,6 +16,18 @@ export interface FrameMsg {
   eyeRatio?: number; // outer eye-corner distance / video width
 }
 
+/** Small JPEG camera thumbnail (~10/s) so the user can see how to centre themselves. Only sent on request. */
+export interface PreviewMsg {
+  type: 'preview';
+  url: string;
+}
+
+/** Content script -> sensor: ask for (or stop) camera thumbnails. */
+export interface WantPreviewMsg {
+  type: 'want-preview';
+  on: boolean;
+}
+
 export type ControlMsg =
   | { type: 'og-start' }
   | { type: 'og-stop' }
