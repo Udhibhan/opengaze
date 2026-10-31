@@ -49,6 +49,7 @@
     </form>
     <script>
       window.clicks = 0;
+      window.__OG_HARNESS__ = true;
       const store = {};
       const listeners = { msg: [], disc: [] };
       const port = {
@@ -110,7 +111,8 @@
           top: window.screenY + window.outerHeight - window.innerHeight - (window.outerWidth - window.innerWidth) / 2,
           scale: 1,
         };
-        store.calibration.model.b = window.target.slice();
+        const jj = () => (Math.random() - 0.5) * 2 * (window.eyeNoise || 0);
+        store.calibration.model.b = [window.target[0] + jj(), window.target[1] + jj()];
         const msg = {
           type: 'frame',
           t: performance.now(),

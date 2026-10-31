@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>OpenGaze harness (isolated)</title>
+    <style>
+      html,
+      body,
+      iframe {
+        margin: 0;
+        border: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Installed extensions don't inject into iframes, so the harness runs undisturbed in here. -->
+    <iframe id="h"></iframe>
+    <script>
+      document.getElementById('h').src = 'test.html' + location.search;
+    </script>
+  </body>
+</html>

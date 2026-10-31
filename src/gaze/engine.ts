@@ -8,6 +8,7 @@ import { Snapper, centre, type Rect } from './snap';
 import { DriftCorrector } from './drift';
 import { LongBlinkDetector } from './blink';
 import { HEAD_RANGES, headToScreen, Steady } from './head';
+import { FixationFilter, fixationParams } from './fixation';
 import type { AccuracyReport } from './accuracy';
 import { HEAD_LIMITS, type HeadPose } from './features';
 import { createStore } from '../lib/store';
@@ -114,6 +115,8 @@ class GazeEngine {
   private mouse: [number, number] | null = null;
   private headNeutral: { x: number; y: number } | null = null;
   private steady = new Steady(6);
+  /** Eye gaze: the cursor sits at the current fixation instead of chasing noisy samples. */
+  fixation = new FixationFilter();
   private lastFrame: TrackerFrame | null = null;
   private smooth: [number, number] | null = null;
   private mouseRaf = 0;
@@ -162,6 +165,7 @@ class GazeEngine {
     this.headRef = headRef;
     this.drift.reset();
     this.smoother.reset();
+    this.fixation.reset();
     this.snapper.reset();
     gazeUi.set({ calibrated: true, accuracy });
     this.persist();
@@ -169,11 +173,13 @@ class GazeEngine {
 
   setAccuracy(accuracy: AccuracyReport) {
     gazeUi.set({ accuracy });
+    this.fixation.configure(fixationParams(settings.get().smoothing, accuracy.p95Px));
     this.persist();
   }
 
   setSnapPad(pad: number) {
-    this.snapper.opts = { ...this.snapper.opts, pad, stickyPx: Math.max(24, pad) };
+    // Sticky snapping: once on a tile, it takes a clear move to switch to a neighbour.
+    this.snapper.opts = { ...this.snapper.opts, pad, stickyPx: Math.max(40, pad * 1.5), switchRatio: 0.5 };
     this.smoother.configure({ saccadePx: Math.max(140, pad * 3) });
   }
 
@@ -205,6 +211,7 @@ class GazeEngine {
   private applySettings() {
     const s = settings.get();
     this.smoother.configure(smootherParams(s.smoothing));
+    this.fixation.configure(fixationParams(s.smoothing, gazeUi.get().accuracy?.p95Px ?? null));
     if (s.selection === 'mouse') {
       if (!this.mouseRaf) {
         const tick = (t: number) => {
@@ -307,9 +314,14 @@ class GazeEngine {
       const W = window.innerWidth;
       const H = window.innerHeight;
       raw = [Math.min(W + 40, Math.max(-40, raw[0])), Math.min(H + 40, Math.max(-40, raw[1]))];
-      const sm = this.smoother.update(raw[0], raw[1], dt);
-      // Head pointer: soft dead zone so a held-still head gives a perfectly still cursor.
-      this.smooth = s.selection === 'head' ? this.steady.update(sm[0], sm[1]) : sm;
+      if (needsModel) {
+        // Eye gaze: hold the cursor at the current fixation; move only on a real jump.
+        this.smooth = this.fixation.update(raw[0], raw[1]);
+      } else {
+        const sm = this.smoother.update(raw[0], raw[1], dt);
+        // Head pointer: soft dead zone so a held-still head gives a perfectly still cursor.
+        this.smooth = s.selection === 'head' ? this.steady.update(sm[0], sm[1]) : sm;
+      }
     }
 
     const paused = ui.paused;
@@ -344,7 +356,9 @@ class GazeEngine {
       if (blinkFired && snapId) this.select(snapId, 'blink', t);
     } else {
       if (snapId && snapId === this.dwellId) {
-        if (!eyesClosed) this.progressMs += dt * 1000;
+        // With eye gaze, dwell only counts while the eyes are actually resting on the tile.
+        const still = s.selection !== 'dwell' || this.fixation.fixating;
+        if (!eyesClosed && still) this.progressMs += dt * 1000;
         this.graceSince = null;
       } else if (this.dwellId && (this.graceSince ??= t) && t - this.graceSince < 160) {
         // brief glitch off the target: hold progress

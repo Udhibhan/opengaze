@@ -7,6 +7,7 @@ import { DriftCorrector } from '../../src/gaze/drift';
 import { HEAD_LIMITS, type HeadPose } from '../../src/gaze/features';
 import { screenToClient, viewportFrame } from '../../src/gaze/screen';
 import { HEAD_RANGES, headToScreen, NeutralCapture, Steady, type HeadRange, type Tilt } from '../../src/gaze/head';
+import { FixationFilter, fixationParams } from '../../src/gaze/fixation';
 import { predictWords } from '../../src/lib/predict';
 import type { StoredCalibration } from '../../src/lib/extensionBridge';
 import { GAZE_PORT, type FrameMsg } from './protocol';
@@ -19,7 +20,9 @@ const KEYS = 'etaoinshrdlucmwfgypbvkjxqz'.split('').concat(['.', ',', '?', "'"])
 type Anchor = { kind: 'tile'; tile: Tile } | { kind: 'point'; x: number; y: number };
 
 // Don't run inside the OpenGaze app itself (it has its own gaze UI), or in frames.
-if (window.top === window && !document.querySelector('meta[name="opengaze-app"]')) start();
+// (The dev harness sets __OG_HARNESS__ to run it inside an iframe, away from an installed copy of the extension.)
+const harness = !!(window as unknown as { __OG_HARNESS__?: boolean }).__OG_HARNESS__;
+if ((window.top === window || harness) && !document.querySelector('meta[name="opengaze-app"]')) start();
 
 function start() {
   // An extension update/reload leaves the previous content script orphaned in open tabs: replace its overlay.
@@ -34,6 +37,7 @@ function start() {
   let capture: NeutralCapture | null = null;
   let mountedMode: 'head' | 'eyes' | null = null;
   const steady = new Steady(6);
+  const fixation = new FixationFilter();
   let ui: Ui | null = null;
   let port: chrome.runtime.Port | null = null;
   let retry = 0;
@@ -101,7 +105,8 @@ function start() {
       // Calm filtering: head movement is continuous (no saccades to snap to); eye gaze keeps saccade snapping.
       if (pointer === 'head') smoother.configure({ minCutoff: 0.35, beta: 0.003, saccadePx: 1e6 });
       else smoother.configure({ minCutoff: 0.4, beta: 0.003, saccadePx: Math.max(140, calib?.accuracy?.p95Px ?? 160) });
-      steady.px = pointer === 'head' ? 6 : 4;
+      steady.px = 6;
+      fixation.configure(fixationParams(4, calib?.accuracy?.p95Px ?? null));
       if (pointer === 'head' && !neutral && !capture) startCapture();
       connect();
     } else teardown();
@@ -627,8 +632,13 @@ function start() {
       trail.push({ t, x: raw[0], y: raw[1] });
       trail = trail.filter((p) => t - p.t < 400);
       const [rx, ry] = drift.apply(raw[0], raw[1]);
-      const [sx, sy] = smoother.update(clamp(rx, -40, innerWidth + 40), clamp(ry, -40, innerHeight + 40), dt);
-      smooth = steady.update(sx, sy);
+      const cx = clamp(rx, -40, innerWidth + 40);
+      const cy = clamp(ry, -40, innerHeight + 40);
+      if (pointer === 'eyes') smooth = fixation.update(cx, cy);
+      else {
+        const [sx, sy] = smoother.update(cx, cy, dt);
+        smooth = steady.update(sx, sy);
+      }
     }
     if (!smooth) return;
     step(t, dt, headOut, closed);
@@ -710,7 +720,8 @@ function start() {
     if (holdUntilMoved && Math.hypot(x - holdUntilMoved[0], y - holdUntilMoved[1]) > R) holdUntilMoved = null;
     const held = !!holdUntilMoved;
     const hasTarget = !held && (anchor?.kind === 'tile' || (anchor?.kind === 'point' && cands.length > 0));
-    if (anchor && hasTarget && !closed && !lockedHere && t >= cooldownUntil) progressMs += dt * 1000;
+    const still = pointer !== 'eyes' || fixation.fixating;
+    if (anchor && hasTarget && !closed && still && !lockedHere && t >= cooldownUntil) progressMs += dt * 1000;
 
     const need = anchor?.kind === 'tile' ? (anchor.tile.dwellMs ?? dwellMs) : dwellMs;
     const progress = hasTarget && !lockedHere ? clamp(progressMs / need, 0, 1) : 0;

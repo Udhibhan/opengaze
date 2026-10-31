@@ -104,7 +104,7 @@ export interface AdaptiveLayout {
  */
 export function adaptiveLayout(p95Px: number | null, viewportW: number, viewportH: number): AdaptiveLayout {
   const p95 = p95Px && isFinite(p95Px) ? p95Px : 220;
-  const minTile = Math.round(Math.max(120, Math.min(1.6 * p95, Math.min(viewportW, viewportH) / 2.5)));
+  const minTile = Math.round(Math.max(120, Math.min(2 * p95, Math.min(viewportW, viewportH) / 2.5)));
   const snapPad = Math.round(Math.max(16, Math.min(0.5 * p95, 90)));
   if (p95 <= 110) return { minTile, replyCols: 3, keyCols: 8, snapPad, tier: 'dense' };
   if (p95 <= 190) return { minTile, replyCols: 3, keyCols: 7, snapPad, tier: 'standard' };

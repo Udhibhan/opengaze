@@ -142,6 +142,9 @@ body {
     rgb(var(--amber) / 0) 70%
   );
   box-shadow: 0 0 24px 6px rgb(var(--amber) / 0.35);
-  transition: opacity 200ms ease;
+  /* A short glide makes fixation-to-fixation jumps calm instead of jarring (off with reduced motion). */
+  transition:
+    opacity 200ms ease,
+    transform 140ms ease-out;
   will-change: transform;
 }

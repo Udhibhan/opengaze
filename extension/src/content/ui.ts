@@ -32,7 +32,7 @@ const CSS = `
   border: 2px solid #3a4e7c; display: flex; align-items: center; justify-content: center; }
 .cursor { position: fixed; left: 0; top: 0; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%;
   background: radial-gradient(circle, rgba(245,178,72,.95) 0 28%, rgba(245,178,72,.35) 45%, rgba(245,178,72,0) 70%);
-  box-shadow: 0 0 22px 6px rgba(245,178,72,.35); opacity: 0; transition: opacity .2s; will-change: transform; }
+  box-shadow: 0 0 22px 6px rgba(245,178,72,.35); opacity: 0; transition: opacity .2s, transform .14s ease-out; will-change: transform; }
 .ring { position: fixed; left: 0; top: 0; overflow: visible; display: none; }
 .ring rect, .ring circle { fill: none; stroke: #f5b248; stroke-width: 5; stroke-linecap: round; }
 .ring .track { stroke: rgba(245,178,72,.25); }

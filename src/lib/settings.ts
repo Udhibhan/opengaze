@@ -23,15 +23,17 @@ export interface Settings {
   useAI: boolean;
   /** Small live camera view with a centring guide on every screen. */
   showCamera: boolean;
+  /** One-time migration flag: calmer eye-gaze defaults. */
+  calmDefaults?: boolean;
 }
 
 const prefersReduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 export const DEFAULT_SETTINGS: Settings = {
   selection: 'dwell',
-  dwellMs: 900,
+  dwellMs: 1200,
   targetScale: 1,
-  smoothing: 3,
+  smoothing: 4,
   voiceURI: '',
   speechRate: 1,
   highContrast: false,
@@ -43,6 +45,7 @@ export const DEFAULT_SETTINGS: Settings = {
   name: '',
   aboutMe: '',
   useAI: true,
+  calmDefaults: true,
   showCamera: true,
 };
 
@@ -53,7 +56,16 @@ const KEY = 'opengaze.settings.v1';
 function load(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    if (raw) {
+      const saved = JSON.parse(raw) as Partial<Settings>;
+      // Calmer eye-gaze defaults: bump older saved settings once (users can still lower them).
+      if (!saved.calmDefaults) {
+        saved.dwellMs = Math.max(saved.dwellMs ?? 1200, 1200);
+        saved.smoothing = Math.max(saved.smoothing ?? 4, 4);
+        saved.calmDefaults = true;
+      }
+      return { ...DEFAULT_SETTINGS, ...saved };
+    }
   } catch {
     /* storage unavailable */
   }

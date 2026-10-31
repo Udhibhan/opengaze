@@ -251,3 +251,33 @@ describe('head pointer', () => {
     expect(r).toEqual({ x: 0.12, y: 0.5 });
   });
 });
+
+describe('fixation filter (calm eye-gaze cursor)', () => {
+  it('holds steady under heavy noise during a fixation', async () => {
+    const { FixationFilter } = await import('./fixation');
+    const f = new FixationFilter({ radius: 90, window: 11, breakFrames: 4 });
+    const r = rng(11);
+    const outs: [number, number][] = [];
+    for (let i = 0; i < 90; i++) outs.push(f.update(500 + (r() - 0.5) * 80, 400 + (r() - 0.5) * 80));
+    const later = outs.slice(20);
+    // Raw samples wander +-40 px every frame; the cursor barely moves and stays near the true point.
+    const xs = later.map((p) => p[0]);
+    const ys = later.map((p) => p[1]);
+    expect(Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys))).toBeLessThan(20);
+    expect(Math.hypot(later[later.length - 1][0] - 500, later[later.length - 1][1] - 400)).toBeLessThan(25);
+    expect(f.fixating).toBe(true);
+  });
+  it('ignores a single-frame spike but follows a real jump after a few frames', async () => {
+    const { FixationFilter } = await import('./fixation');
+    const f = new FixationFilter({ radius: 90, window: 8, breakFrames: 3 });
+    for (let i = 0; i < 20; i++) f.update(300, 300);
+    expect(f.update(1200, 700)).toEqual([300, 300]); // spike ignored
+    expect(f.fixating).toBe(false);
+    f.update(300, 300);
+    expect(f.fixating).toBe(true);
+    f.update(1000, 600);
+    f.update(1004, 598);
+    const [x, y] = f.update(998, 603);
+    expect(Math.hypot(x - 1000, y - 600)).toBeLessThan(6);
+  });
+});

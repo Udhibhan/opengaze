@@ -59,7 +59,7 @@ How a dedicated device works, in our own words:
 | Pupil–glint vector | Iris centre in **eye-local coordinates** (relative to the eye corners, in eye widths), eyelid aperture, `eyeLook*` blendshapes, head yaw/pitch/roll/translation. Both eyes averaged, weighted by openness |
 | Calibration | 9- or 13-point calibration (600 ms settle, 25 frames/point, MAD outlier rejection) → **second-order polynomial ridge regression**. λ is chosen by leave-one-point-out cross-validation on held-out frames |
 | Accuracy report | **5-point validation** on points not used for fitting: mean and 95th-percentile error in px and visual degrees, grade, per-point heatmap |
-| Tracker firmware filtering | **One Euro filter** + saccade detection (snap on big jumps, steady during fixation) |
+| Tracker firmware filtering | **Fixation filter**: the cursor sits at the robust (median) centre of the current fixation with a soft dead zone, and only jumps after several consistent samples elsewhere. Dwell only counts while the eyes are actually fixating. **One Euro filter** for mouse / head pointer |
 | Big targets / clinician setup | **Adaptive targets**: measured p95 error sets the minimum tile size and grid density. **Magnetic snapping** with hysteresis |
 | Re-calibration visits | **Implicit drift correction**: each selection nudges a bounded, decaying bias toward the selected tile's centre |
 | Head-box limits | **Head-movement guard**: leaves the calibrated pose range → calm "move back" prompt, no mis-clicks |
